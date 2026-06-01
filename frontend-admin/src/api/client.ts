@@ -204,6 +204,21 @@ export type SnapshotPublishResponse = {
   share_token: string
 }
 
+export type ShareLink = {
+  id: number
+  snapshot_id: number
+  snapshot_title: string
+  snapshot_status: string
+  is_active: boolean
+  expires_at: string | null
+  created_at: string
+}
+
+export type ShareLinkCreateResponse = {
+  share_link: ShareLink
+  share_token: string
+}
+
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -395,6 +410,32 @@ export async function publishSnapshot(token: string, input: SnapshotPublishInput
 
 export async function revokeSnapshot(token: string, snapshotId: number): Promise<PublishedSnapshot> {
   return requestJson<PublishedSnapshot>(`/snapshots/${snapshotId}/revoke`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function fetchShareLinks(token: string): Promise<ShareLink[]> {
+  return requestJson<ShareLink[]>('/share-links', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function createShareLink(token: string, snapshotId: number): Promise<ShareLinkCreateResponse> {
+  return requestJson<ShareLinkCreateResponse>(`/snapshots/${snapshotId}/share-links`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function revokeShareLink(token: string, shareLinkId: number): Promise<ShareLink> {
+  return requestJson<ShareLink>(`/share-links/${shareLinkId}/revoke`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

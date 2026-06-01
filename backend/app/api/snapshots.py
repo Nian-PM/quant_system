@@ -43,6 +43,21 @@ class SnapshotPublishResponse(BaseModel):
     share_token: str
 
 
+class ShareLinkResponse(BaseModel):
+    id: int
+    snapshot_id: int
+    snapshot_title: str
+    snapshot_status: SnapshotStatus
+    is_active: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class ShareLinkCreateResponse(BaseModel):
+    share_link: ShareLinkResponse
+    share_token: str
+
+
 class PublicSnapshotResponse(BaseModel):
     id: int
     title: str
@@ -66,6 +81,28 @@ def snapshot_response(snapshot: PublishedSnapshot) -> SnapshotResponse:
         published_at=snapshot.published_at,
         created_at=snapshot.created_at,
     )
+
+
+def share_link_response(share_link: ShareLink, snapshot: PublishedSnapshot) -> ShareLinkResponse:
+    return ShareLinkResponse(
+        id=share_link.id or 0,
+        snapshot_id=snapshot.id or 0,
+        snapshot_title=snapshot.title,
+        snapshot_status=snapshot.status,
+        is_active=share_link.is_active,
+        expires_at=share_link.expires_at,
+        created_at=share_link.created_at,
+    )
+
+
+def create_share_link_for_snapshot(snapshot: PublishedSnapshot) -> tuple[ShareLink, str]:
+    share_token = secrets.token_urlsafe(24)
+    share_link = ShareLink(
+        snapshot_id=snapshot.id or 0,
+        token_hash=hash_share_token(share_token),
+        is_active=True,
+    )
+    return share_link, share_token
 
 
 def build_immutable_payload(backtest: BacktestRun, title: str, publisher: User) -> dict:
@@ -127,12 +164,7 @@ def publish_snapshot(
     session.commit()
     session.refresh(snapshot)
 
-    share_token = secrets.token_urlsafe(24)
-    share_link = ShareLink(
-        snapshot_id=snapshot.id or 0,
-        token_hash=hash_share_token(share_token),
-        is_active=True,
-    )
+    share_link, share_token = create_share_link_for_snapshot(snapshot)
     session.add(share_link)
     session.commit()
 
@@ -145,6 +177,77 @@ def publish_snapshot(
         detail={"backtest_run_id": backtest.id, "version": version},
     )
     return SnapshotPublishResponse(snapshot=snapshot_response(snapshot), share_token=share_token)
+
+
+@router.get("/share-links", response_model=list[ShareLinkResponse])
+def list_share_links(
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> list[ShareLinkResponse]:
+    statement = select(ShareLink).order_by(ShareLink.created_at.desc())
+    responses: list[ShareLinkResponse] = []
+    for share_link in session.exec(statement).all():
+        snapshot = session.get(PublishedSnapshot, share_link.snapshot_id)
+        if snapshot:
+            responses.append(share_link_response(share_link, snapshot))
+    return responses
+
+
+@router.post("/snapshots/{snapshot_id}/share-links", response_model=ShareLinkCreateResponse)
+def create_snapshot_share_link(
+    snapshot_id: int,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> ShareLinkCreateResponse:
+    snapshot = session.get(PublishedSnapshot, snapshot_id)
+    if not snapshot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+    if snapshot.status != SnapshotStatus.published:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only published snapshots can create links")
+
+    share_link, share_token = create_share_link_for_snapshot(snapshot)
+    session.add(share_link)
+    session.commit()
+    session.refresh(share_link)
+
+    record_operation(
+        session,
+        action="share_link.create",
+        actor=current_user.username,
+        target_type="share_link",
+        target_id=str(share_link.id),
+        detail={"snapshot_id": snapshot.id},
+    )
+    return ShareLinkCreateResponse(share_link=share_link_response(share_link, snapshot), share_token=share_token)
+
+
+@router.post("/share-links/{share_link_id}/revoke", response_model=ShareLinkResponse)
+def revoke_share_link(
+    share_link_id: int,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> ShareLinkResponse:
+    share_link = session.get(ShareLink, share_link_id)
+    if not share_link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
+    snapshot = session.get(PublishedSnapshot, share_link.snapshot_id)
+    if not snapshot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+
+    share_link.is_active = False
+    session.add(share_link)
+    session.commit()
+    session.refresh(share_link)
+
+    record_operation(
+        session,
+        action="share_link.revoke",
+        actor=current_user.username,
+        target_type="share_link",
+        target_id=str(share_link.id),
+        detail={"snapshot_id": snapshot.id},
+    )
+    return share_link_response(share_link, snapshot)
 
 
 @router.post("/snapshots/{snapshot_id}/revoke", response_model=SnapshotResponse)

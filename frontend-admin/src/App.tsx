@@ -41,6 +41,7 @@ import {
   fetchMarketBars,
   fetchPaperRuns,
   fetchPortfolios,
+  fetchShareLinks,
   fetchSnapshots,
   fetchStrategies,
   fetchStrategyParameterSets,
@@ -48,10 +49,12 @@ import {
   createInstrument,
   createPaperRun,
   createPortfolio,
+  createShareLink,
   createStrategyParameterSet,
   importCsvMarketData,
   publishSnapshot,
   revokeSnapshot,
+  revokeShareLink,
   type BacktestInput,
   type BacktestRun,
   type Bar,
@@ -65,6 +68,7 @@ import {
   type PaperRunInput,
   type Portfolio,
   type PublishedSnapshot,
+  type ShareLink,
   type SnapshotPublishInput,
   type StrategyParameter,
   type StrategyParameterSet,
@@ -107,6 +111,7 @@ function App() {
   const [paperRuns, setPaperRuns] = useState<PaperRun[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
   const [snapshots, setSnapshots] = useState<PublishedSnapshot[]>([])
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
   const [latestShareToken, setLatestShareToken] = useState('')
   const [strategyParameterSets, setStrategyParameterSets] = useState<StrategyParameterSet[]>([])
   const [operationLogs, setOperationLogs] = useState<OperationLog[]>([])
@@ -130,11 +135,14 @@ function App() {
   const [paperRunStarting, setPaperRunStarting] = useState(false)
   const [snapshotPublishing, setSnapshotPublishing] = useState(false)
   const [snapshotRevokingId, setSnapshotRevokingId] = useState<number | null>(null)
+  const [shareLinkCreatingId, setShareLinkCreatingId] = useState<number | null>(null)
+  const [shareLinkRevokingId, setShareLinkRevokingId] = useState<number | null>(null)
   const [marketDataError, setMarketDataError] = useState('')
   const [strategyParameterError, setStrategyParameterError] = useState('')
   const [backtestError, setBacktestError] = useState('')
   const [paperRunError, setPaperRunError] = useState('')
   const [snapshotError, setSnapshotError] = useState('')
+  const [shareLinkError, setShareLinkError] = useState('')
 
   const refreshAdminData = (accessToken: string) => {
     Promise.all([
@@ -148,6 +156,7 @@ function App() {
       fetchBacktests(accessToken),
       fetchPaperRuns(accessToken),
       fetchSnapshots(accessToken),
+      fetchShareLinks(accessToken),
     ])
       .then(([
         strategyPayload,
@@ -160,6 +169,7 @@ function App() {
         backtestPayload,
         paperRunPayload,
         snapshotPayload,
+        shareLinkPayload,
       ]) => {
         setStrategies(strategyPayload)
         setCurrentUser(profilePayload)
@@ -171,6 +181,7 @@ function App() {
         setBacktests(backtestPayload)
         setPaperRuns(paperRunPayload)
         setSnapshots(snapshotPayload)
+        setShareLinks(shareLinkPayload)
         setApiStatus('Connected')
 
         const firstInstrument = instrumentPayload[0]
@@ -192,6 +203,7 @@ function App() {
         setBacktests([])
         setPaperRuns([])
         setSnapshots([])
+        setShareLinks([])
       })
   }
 
@@ -282,6 +294,7 @@ function App() {
     setBacktests([])
     setPaperRuns([])
     setSnapshots([])
+    setShareLinks([])
   }
 
   const handleCreateInstrument = (values: InstrumentInput) => {
@@ -450,6 +463,44 @@ function App() {
       .finally(() => setSnapshotPublishing(false))
   }
 
+  const handleCreateShareLink = (snapshotId: number) => {
+    if (!token) {
+      return
+    }
+
+    setShareLinkCreatingId(snapshotId)
+    setShareLinkError('')
+    setLatestShareToken('')
+    createShareLink(token, snapshotId)
+      .then((payload) => {
+        setLatestShareToken(payload.share_token)
+        return Promise.all([fetchShareLinks(token), fetchOperationLogs(token)])
+      })
+      .then(([shareLinkPayload, logPayload]) => {
+        setShareLinks(shareLinkPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setShareLinkError(error instanceof Error ? error.message : 'Share link create failed'))
+      .finally(() => setShareLinkCreatingId(null))
+  }
+
+  const handleRevokeShareLink = (shareLinkId: number) => {
+    if (!token) {
+      return
+    }
+
+    setShareLinkRevokingId(shareLinkId)
+    setShareLinkError('')
+    revokeShareLink(token, shareLinkId)
+      .then(() => Promise.all([fetchShareLinks(token), fetchOperationLogs(token)]))
+      .then(([shareLinkPayload, logPayload]) => {
+        setShareLinks(shareLinkPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setShareLinkError(error instanceof Error ? error.message : 'Share link revoke failed'))
+      .finally(() => setShareLinkRevokingId(null))
+  }
+
   const handleRevokeSnapshot = (snapshotId: number) => {
     if (!token) {
       return
@@ -458,9 +509,10 @@ function App() {
     setSnapshotRevokingId(snapshotId)
     setSnapshotError('')
     revokeSnapshot(token, snapshotId)
-      .then(() => Promise.all([fetchSnapshots(token), fetchOperationLogs(token)]))
-      .then(([snapshotPayload, logPayload]) => {
+      .then(() => Promise.all([fetchSnapshots(token), fetchShareLinks(token), fetchOperationLogs(token)]))
+      .then(([snapshotPayload, shareLinkPayload, logPayload]) => {
         setSnapshots(snapshotPayload)
+        setShareLinks(shareLinkPayload)
         setOperationLogs(logPayload)
       })
       .catch((error) => setSnapshotError(error instanceof Error ? error.message : 'Snapshot revoke failed'))
@@ -576,6 +628,13 @@ function App() {
                   <Text type="secondary">Published Snapshots</Text>
                   <Title level={2}>{snapshots.length}</Title>
                   <Text>{snapshots[0] ? `Latest ${snapshots[0].status}` : 'Publish a reviewed backtest'}</Text>
+                </Space>
+              </Card>
+              <Card>
+                <Space orientation="vertical" size={4}>
+                  <Text type="secondary">Active Share Links</Text>
+                  <Title level={2}>{shareLinks.filter((link) => link.is_active).length}</Title>
+                  <Text>{shareLinks[0] ? `Latest snapshot #${shareLinks[0].snapshot_id}` : 'Create a client link'}</Text>
                 </Space>
               </Card>
               <Card>
@@ -1026,6 +1085,73 @@ function App() {
                     },
                   ]}
                   dataSource={snapshots.map((snapshot) => ({ ...snapshot, key: snapshot.id }))}
+                />
+              </Card>
+
+              <Card title="Client Share Link Management">
+                {shareLinkError ? <Alert type="error" showIcon title={shareLinkError} className="form-alert" /> : null}
+                {latestShareToken ? (
+                  <Alert
+                    type="success"
+                    showIcon
+                    className="form-alert"
+                    title="New share link ready"
+                    description={clientReportUrl(latestShareToken)}
+                  />
+                ) : null}
+                <Table
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'Link ID', dataIndex: 'id', width: 80 },
+                    { title: 'Snapshot', dataIndex: 'snapshot_id', width: 100 },
+                    { title: 'Title', dataIndex: 'snapshot_title' },
+                    {
+                      title: 'Snapshot Status',
+                      dataIndex: 'snapshot_status',
+                      width: 140,
+                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{status}</Tag>,
+                    },
+                    {
+                      title: 'Link Status',
+                      dataIndex: 'is_active',
+                      width: 120,
+                      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'active' : 'revoked'}</Tag>,
+                    },
+                    {
+                      title: 'Created At',
+                      dataIndex: 'created_at',
+                      width: 190,
+                      render: (value: string) => new Date(value).toLocaleString(),
+                    },
+                    {
+                      title: 'Action',
+                      dataIndex: 'id',
+                      width: 250,
+                      render: (shareLinkId: number, shareLink: ShareLink) => (
+                        <Space>
+                          <Button
+                            size="small"
+                            icon={<LinkOutlined />}
+                            onClick={() => handleCreateShareLink(shareLink.snapshot_id)}
+                            loading={shareLinkCreatingId === shareLink.snapshot_id}
+                            disabled={shareLink.snapshot_status !== 'published'}
+                          >
+                            New Link
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() => handleRevokeShareLink(shareLinkId)}
+                            loading={shareLinkRevokingId === shareLinkId}
+                            disabled={!shareLink.is_active}
+                          >
+                            Revoke Link
+                          </Button>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                  dataSource={shareLinks.map((shareLink) => ({ ...shareLink, key: shareLink.id }))}
                 />
               </Card>
 

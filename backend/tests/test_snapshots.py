@@ -117,6 +117,60 @@ def test_revoked_snapshot_share_token_cannot_be_read() -> None:
         assert public_response.status_code == 404
 
 
+def test_admin_can_manage_snapshot_share_links_without_persisting_plain_token() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+        backtest_id = create_backtest(client, token)
+        publish_response = client.post(
+            "/api/snapshots/publish",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"backtest_run_id": backtest_id, "title": "Managed link report"},
+        )
+        assert publish_response.status_code == 200
+        snapshot_id = publish_response.json()["snapshot"]["id"]
+
+        list_response = client.get(
+            "/api/share-links",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert list_response.status_code == 200
+        links = list_response.json()
+        first_link = next(item for item in links if item["snapshot_id"] == snapshot_id)
+        assert first_link["snapshot_title"] == "Managed link report"
+        assert first_link["is_active"] is True
+        assert "share_token" not in first_link
+
+        create_response = client.post(
+            f"/api/snapshots/{snapshot_id}/share-links",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert create_response.status_code == 200
+        created = create_response.json()
+        assert created["share_token"]
+        assert created["share_link"]["snapshot_id"] == snapshot_id
+
+        public_response = client.get(f"/api/public/snapshots/{created['share_token']}")
+        assert public_response.status_code == 200
+
+        revoke_response = client.post(
+            f"/api/share-links/{created['share_link']['id']}/revoke",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert revoke_response.status_code == 200
+        assert revoke_response.json()["is_active"] is False
+
+        revoked_public_response = client.get(f"/api/public/snapshots/{created['share_token']}")
+        assert revoked_public_response.status_code == 404
+
+        logs_response = client.get(
+            "/api/operation-logs",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        actions = [item["action"] for item in logs_response.json()]
+        assert "share_link.create" in actions
+        assert "share_link.revoke" in actions
+
+
 def test_cannot_publish_failed_or_missing_backtest() -> None:
     with TestClient(app) as client:
         token = login_token(client)
