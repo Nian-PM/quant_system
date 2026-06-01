@@ -128,6 +128,64 @@ The report must include:
 
 The visual style should be professional, credible, and chart-rich. Motion and visual polish are allowed only when they improve understanding or trust.
 
+#### 5.2.1 Next-Phase Client Display Upgrade Standard
+
+The client display frontend must be upgraded from an engineering-readable report into a customer-facing investment presentation experience. Technical correctness remains the baseline, but the next phase must also optimize for customer trust, visual credibility, and fast comprehension.
+
+Before implementing the redesign, the team must complete real product and web-style research. The research should inspect current public examples from investment analytics, portfolio reporting, and wealth-management products, then document the applicable patterns before changing UI code. Initial reference directions include:
+
+- Bloomberg Portfolio Analytics: emphasizes risk management, performance attribution, multi-portfolio visualization, and client-ready reporting templates.
+- Morningstar Direct Advisory Suite reports: emphasizes clear client communication, client-ready templates, progress toward goals, risk alignment, and performance over time.
+- Morningstar Portfolio and X-Ray materials: emphasize performance charting, allocation, risk, benchmark fit, and overlap/portfolio-construction diagnostics.
+- BlackRock Advisor Center 360 / Aladdin-related portfolio tools: emphasize holdings-based risk exposure, portfolio comparison, risk contributors, and configurable client reports.
+
+The research output must be saved or summarized before implementation and should answer:
+
+1. Which reference products were inspected, with links and dates.
+2. Which visual patterns are relevant to this project.
+3. Which patterns are rejected because they would overpromise, imply live trading, or conflict with V1 constraints.
+4. What design direction is chosen for the first implementation pass.
+
+Frontend implementation must route through the project frontend skills before code changes:
+
+- Use `frontend-skill-router` first.
+- For high-fidelity visual direction, layout exploration, and report-style presentation, use the `claude-design` frontend skill.
+- If the task becomes component-level implementation or browser verification, use the relevant frontend implementation workflow selected by the router.
+
+The first upgraded client report should follow this information order:
+
+```text
+1. Strategy summary hero
+2. Core metrics dashboard
+3. Return, benchmark, and drawdown overview
+4. Candlestick chart with trade markers
+5. Position curve
+6. Trade detail table
+7. Strategy parameters and backtest assumptions
+8. Risk disclosure and data-quality notes
+```
+
+The first viewport must answer the customer's basic trust questions within ten seconds:
+
+- What strategy is this?
+- What stock or fixed portfolio does it evaluate?
+- What period and data frequency does it use?
+- What were the main return and risk results?
+- Is the report a reviewed immutable snapshot rather than a live-trading promise?
+
+Required presentation improvements:
+
+- Add a concise report summary, not only raw metric cards.
+- Show strategy scope, stock/portfolio name, backtest period, frequency, data source, snapshot version, publication time, and publisher.
+- Add warning states when sample size is too small, data quality is weak, or assumptions are incomplete.
+- Make risk and methodology explanations structured and visible.
+- Keep the page read-only; do not add customer-side parameter editing.
+- Keep strategy calculation in backend snapshot data; the display frontend must not compute strategy logic.
+- Use a visual system suitable for financial reporting: restrained palette, strong hierarchy, high-density charts, readable tables, and credible risk language.
+- Verify desktop, tablet, and mobile report layouts in a real browser before considering the redesign complete.
+
+The next-phase design should not copy any proprietary product UI. External products are research references for communication patterns, report structure, and trust-building conventions; this system must use an original visual identity.
+
 ### 5.3 Backend API
 
 The backend exposes APIs for both frontends and owns the main business workflow:
