@@ -8,6 +8,7 @@ from app.api import (
     market_data,
     operation_logs,
     portfolios,
+    snapshots,
     strategies,
     strategy_parameter_sets,
 )
@@ -20,5 +21,6 @@ api_router.include_router(instruments.router)
 api_router.include_router(market_data.router)
 api_router.include_router(operation_logs.router)
 api_router.include_router(portfolios.router)
+api_router.include_router(snapshots.router)
 api_router.include_router(strategies.router)
 api_router.include_router(strategy_parameter_sets.router)

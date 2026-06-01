@@ -1,0 +1,199 @@
+from datetime import datetime
+import hashlib
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlmodel import select
+
+from app.core.database import SessionDep
+from app.core.security import get_current_user
+from app.models import (
+    BacktestRun,
+    PublishedSnapshot,
+    ShareLink,
+    SnapshotStatus,
+    TaskStatus,
+    User,
+    utc_now,
+)
+from app.services.operation_log import record_operation
+
+router = APIRouter(tags=["snapshots"])
+
+
+class SnapshotPublishRequest(BaseModel):
+    backtest_run_id: int
+    title: str = Field(min_length=1)
+
+
+class SnapshotResponse(BaseModel):
+    id: int
+    backtest_run_id: int
+    version: int
+    status: SnapshotStatus
+    title: str
+    immutable_payload: dict
+    published_at: datetime | None
+    created_at: datetime
+
+
+class SnapshotPublishResponse(BaseModel):
+    snapshot: SnapshotResponse
+    share_token: str
+
+
+class PublicSnapshotResponse(BaseModel):
+    id: int
+    title: str
+    version: int
+    payload: dict
+    published_at: datetime | None
+
+
+def hash_share_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def snapshot_response(snapshot: PublishedSnapshot) -> SnapshotResponse:
+    return SnapshotResponse(
+        id=snapshot.id or 0,
+        backtest_run_id=snapshot.backtest_run_id,
+        version=snapshot.version,
+        status=snapshot.status,
+        title=snapshot.title,
+        immutable_payload=snapshot.immutable_payload,
+        published_at=snapshot.published_at,
+        created_at=snapshot.created_at,
+    )
+
+
+def build_immutable_payload(backtest: BacktestRun, title: str, publisher: User) -> dict:
+    return {
+        "title": title,
+        "strategy_id": backtest.strategy_id,
+        "strategy_version": "0.1.0",
+        "parameter_set_id": backtest.parameter_set_id,
+        "backtest_run_id": backtest.id,
+        "backtest_config": backtest.config,
+        "metrics": backtest.metrics,
+        "result_payload": backtest.result_payload,
+        "generated_at": utc_now().isoformat(),
+        "publisher": publisher.username,
+        "risk_disclosure": backtest.result_payload.get(
+            "risk_disclosure",
+            "Backtest results are simulated and do not represent real-money trading.",
+        ),
+    }
+
+
+@router.get("/snapshots", response_model=list[SnapshotResponse])
+def list_snapshots(
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> list[SnapshotResponse]:
+    statement = select(PublishedSnapshot).order_by(PublishedSnapshot.created_at.desc())
+    return [snapshot_response(snapshot) for snapshot in session.exec(statement).all()]
+
+
+@router.post("/snapshots/publish", response_model=SnapshotPublishResponse)
+def publish_snapshot(
+    payload: SnapshotPublishRequest,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> SnapshotPublishResponse:
+    backtest = session.get(BacktestRun, payload.backtest_run_id)
+    if not backtest:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown backtest id: {payload.backtest_run_id}",
+        )
+    if backtest.status != TaskStatus.succeeded:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only succeeded backtests can be published")
+
+    prior_statement = select(PublishedSnapshot).where(PublishedSnapshot.backtest_run_id == backtest.id)
+    prior_versions = [snapshot.version for snapshot in session.exec(prior_statement).all()]
+    version = max(prior_versions, default=0) + 1
+
+    snapshot = PublishedSnapshot(
+        backtest_run_id=backtest.id or 0,
+        version=version,
+        status=SnapshotStatus.published,
+        title=payload.title.strip(),
+        immutable_payload=build_immutable_payload(backtest, payload.title.strip(), current_user),
+        published_at=utc_now(),
+    )
+    session.add(snapshot)
+    session.commit()
+    session.refresh(snapshot)
+
+    share_token = secrets.token_urlsafe(24)
+    share_link = ShareLink(
+        snapshot_id=snapshot.id or 0,
+        token_hash=hash_share_token(share_token),
+        is_active=True,
+    )
+    session.add(share_link)
+    session.commit()
+
+    record_operation(
+        session,
+        action="snapshot.publish",
+        actor=current_user.username,
+        target_type="published_snapshot",
+        target_id=str(snapshot.id),
+        detail={"backtest_run_id": backtest.id, "version": version},
+    )
+    return SnapshotPublishResponse(snapshot=snapshot_response(snapshot), share_token=share_token)
+
+
+@router.post("/snapshots/{snapshot_id}/revoke", response_model=SnapshotResponse)
+def revoke_snapshot(
+    snapshot_id: int,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> SnapshotResponse:
+    snapshot = session.get(PublishedSnapshot, snapshot_id)
+    if not snapshot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+
+    snapshot.status = SnapshotStatus.revoked
+    session.add(snapshot)
+    statement = select(ShareLink).where(ShareLink.snapshot_id == snapshot_id)
+    for share_link in session.exec(statement).all():
+        share_link.is_active = False
+        session.add(share_link)
+    session.commit()
+    session.refresh(snapshot)
+
+    record_operation(
+        session,
+        action="snapshot.revoke",
+        actor=current_user.username,
+        target_type="published_snapshot",
+        target_id=str(snapshot.id),
+        detail={},
+    )
+    return snapshot_response(snapshot)
+
+
+@router.get("/public/snapshots/{share_token}", response_model=PublicSnapshotResponse)
+def get_public_snapshot(share_token: str, session: SessionDep) -> PublicSnapshotResponse:
+    token_hash = hash_share_token(share_token)
+    share_link = session.exec(
+        select(ShareLink).where(ShareLink.token_hash == token_hash, ShareLink.is_active == True)  # noqa: E712
+    ).first()
+    if not share_link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+
+    snapshot = session.get(PublishedSnapshot, share_link.snapshot_id)
+    if not snapshot or snapshot.status != SnapshotStatus.published:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+
+    return PublicSnapshotResponse(
+        id=snapshot.id or 0,
+        title=snapshot.title,
+        version=snapshot.version,
+        payload=snapshot.immutable_payload,
+        published_at=snapshot.published_at,
+    )

@@ -1,0 +1,131 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def login_token(client: TestClient) -> str:
+    response = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
+def create_backtest(client: TestClient, token: str) -> int:
+    instrument_response = client.post(
+        "/api/instruments",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"symbol": "TSNAP01", "exchange": "SH", "name": "Snapshot Test", "asset_type": "stock"},
+    )
+    assert instrument_response.status_code == 200
+    instrument_id = instrument_response.json()["id"]
+
+    parameter_response = client.post(
+        "/api/strategy-parameter-sets",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "strategy_id": "rolling_t_grid",
+            "name": "Snapshot config",
+            "parameters": {"grid_percent": 1.0, "enable_ma_filter": False},
+        },
+    )
+    assert parameter_response.status_code == 200
+    parameter_set_id = parameter_response.json()["id"]
+
+    import_response = client.post(
+        "/api/market-data/import-csv",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "instrument_id": instrument_id,
+            "frequency": "5m",
+            "source": "csv",
+            "csv_text": (
+                "timestamp,open,high,low,close,volume\n"
+                "2026-01-02 09:35:00,10,10.5,9.8,10.0,1000\n"
+                "2026-01-02 09:40:00,10.0,10.8,9.9,10.7,1200\n"
+            ),
+        },
+    )
+    assert import_response.status_code == 200
+
+    backtest_response = client.post(
+        "/api/backtests",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "instrument_id": instrument_id,
+            "frequency": "5m",
+            "parameter_set_id": parameter_set_id,
+            "initial_cash": 100000,
+        },
+    )
+    assert backtest_response.status_code == 200
+    return backtest_response.json()["id"]
+
+
+def test_admin_can_publish_snapshot_and_client_can_read_with_token() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+        backtest_id = create_backtest(client, token)
+
+        publish_response = client.post(
+            "/api/snapshots/publish",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"backtest_run_id": backtest_id, "title": "Published rolling T report"},
+        )
+
+        assert publish_response.status_code == 200
+        published = publish_response.json()
+        assert published["snapshot"]["status"] == "published"
+        assert published["snapshot"]["version"] == 1
+        assert published["share_token"]
+        assert published["snapshot"]["immutable_payload"]["title"] == "Published rolling T report"
+        assert published["snapshot"]["immutable_payload"]["metrics"]["bar_count"] == 2
+
+        public_response = client.get(f"/api/public/snapshots/{published['share_token']}")
+        assert public_response.status_code == 200
+        public_snapshot = public_response.json()
+        assert public_snapshot["title"] == "Published rolling T report"
+        assert public_snapshot["payload"]["metrics"]["cumulative_return"] == 0.07
+
+        logs_response = client.get(
+            "/api/operation-logs",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        actions = [item["action"] for item in logs_response.json()]
+        assert "snapshot.publish" in actions
+
+
+def test_revoked_snapshot_share_token_cannot_be_read() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+        backtest_id = create_backtest(client, token)
+        publish_response = client.post(
+            "/api/snapshots/publish",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"backtest_run_id": backtest_id, "title": "Report to revoke"},
+        )
+        assert publish_response.status_code == 200
+        share_token = publish_response.json()["share_token"]
+        snapshot_id = publish_response.json()["snapshot"]["id"]
+
+        revoke_response = client.post(
+            f"/api/snapshots/{snapshot_id}/revoke",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert revoke_response.status_code == 200
+        assert revoke_response.json()["status"] == "revoked"
+        public_response = client.get(f"/api/public/snapshots/{share_token}")
+        assert public_response.status_code == 404
+
+
+def test_cannot_publish_failed_or_missing_backtest() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+
+        response = client.post(
+            "/api/snapshots/publish",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"backtest_run_id": 999999, "title": "Missing report"},
+        )
+
+        assert response.status_code == 400
+        assert "Unknown backtest" in response.json()["detail"]

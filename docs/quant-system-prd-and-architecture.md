@@ -229,6 +229,8 @@ Each published snapshot must save enough metadata to reproduce or audit the resu
 - Generation time
 - Publisher/admin user
 
+The first share-link implementation uses an opaque token generated at publish time. The token is stored only as a hash in the database. Public clients can read a published snapshot through the token endpoint, but revoked snapshots and inactive share links must return not found. Revoking a snapshot disables all associated share links without mutating the snapshot payload.
+
 ## 7. Data Flow
 
 ### 7.1 Backtest to Published Report
