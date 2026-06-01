@@ -67,7 +67,7 @@ Default local URLs:
 - Admin backtest review panel for metrics, curves, positions, and trade details before publishing.
 - Manual paper simulation runs using the same backend strategy path.
 - Immutable snapshot publishing with revocation and tokenized client report links.
-- Client display report page that loads published snapshots by token.
+- Client display report page that loads published snapshots by token and renders ECharts/Lightweight Charts reports.
 - Operation logs for login, instrument, portfolio, market data, strategy, backtest, paper run, and snapshot actions.
 
 CSV market data import currently expects:

@@ -1,4 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import * as echarts from 'echarts'
+import {
+  CandlestickSeries,
+  ColorType,
+  createChart,
+  createSeriesMarkers,
+  type IChartApi,
+  type ISeriesApi,
+  type SeriesMarker,
+  type Time,
+} from 'lightweight-charts'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api'
@@ -83,25 +94,218 @@ function formatNumber(value?: number): string {
   return String(value)
 }
 
-function buildLinePath(points: Point[], width: number, height: number): string {
-  if (!points.length) {
-    return ''
-  }
-  const values = points.map((point) => point.value)
-  const minValue = Math.min(...values)
-  const maxValue = Math.max(...values)
-  const range = maxValue - minValue || 1
-  return points
-    .map((point, index) => {
-      const x = points.length === 1 ? 0 : (index / (points.length - 1)) * width
-      const y = height - ((point.value - minValue) / range) * height
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
 function latestValue(points: Point[] = []): number | undefined {
   return points[points.length - 1]?.value
+}
+
+function chartTime(timestamp: string): Time {
+  const parsed = Date.parse(timestamp)
+  return Math.floor((Number.isNaN(parsed) ? Date.now() : parsed) / 1000) as Time
+}
+
+function formatTradeValue(value: unknown): string {
+  if (typeof value === 'number') {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+  }
+  return typeof value === 'string' ? value : '-'
+}
+
+function CurveChart({
+  equityCurve,
+  benchmarkCurve,
+  drawdownCurve,
+}: {
+  equityCurve: Point[]
+  benchmarkCurve: Point[]
+  drawdownCurve: Point[]
+}) {
+  const chartRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!chartRef.current) {
+      return
+    }
+
+    const chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' })
+    chart.setOption({
+      animationDuration: 500,
+      color: ['#0f766e', '#64748b', '#dc2626'],
+      tooltip: { trigger: 'axis' },
+      legend: { top: 0, right: 8, textStyle: { color: '#475569' } },
+      grid: { left: 46, right: 28, top: 42, bottom: 34 },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: equityCurve.map((point) => point.timestamp),
+        axisLabel: { color: '#64748b' },
+        axisLine: { lineStyle: { color: '#d7dee8' } },
+      },
+      yAxis: [
+        {
+          type: 'value',
+          scale: true,
+          axisLabel: { color: '#64748b' },
+          splitLine: { lineStyle: { color: '#e7edf5' } },
+        },
+        {
+          type: 'value',
+          axisLabel: { color: '#64748b', formatter: (value: number) => `${(value * 100).toFixed(0)}%` },
+          splitLine: { show: false },
+        },
+      ],
+      series: [
+        {
+          name: 'Strategy Equity',
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 3 },
+          areaStyle: { opacity: 0.08 },
+          data: equityCurve.map((point) => point.value),
+        },
+        {
+          name: 'Benchmark',
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2, type: 'dashed' },
+          data: benchmarkCurve.map((point) => point.value),
+        },
+        {
+          name: 'Drawdown',
+          type: 'line',
+          yAxisIndex: 1,
+          symbol: 'none',
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.1 },
+          data: drawdownCurve.map((point) => point.value),
+        },
+      ],
+    })
+
+    const resize = () => chart.resize()
+    window.addEventListener('resize', resize)
+    return () => {
+      window.removeEventListener('resize', resize)
+      chart.dispose()
+    }
+  }, [benchmarkCurve, drawdownCurve, equityCurve])
+
+  return <div className="echart-canvas" ref={chartRef} />
+}
+
+function PositionChart({ points }: { points: Point[] }) {
+  const chartRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!chartRef.current) {
+      return
+    }
+
+    const chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' })
+    chart.setOption({
+      animationDuration: 450,
+      color: ['#2563eb'],
+      tooltip: { trigger: 'axis' },
+      grid: { left: 40, right: 16, top: 18, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: points.map((point) => point.timestamp),
+        axisLabel: { color: '#64748b' },
+        axisLine: { lineStyle: { color: '#d7dee8' } },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#64748b', formatter: (value: number) => `${value}%` },
+        splitLine: { lineStyle: { color: '#e7edf5' } },
+      },
+      series: [
+        {
+          name: 'Position',
+          type: 'line',
+          step: 'middle',
+          symbol: 'none',
+          areaStyle: { opacity: 0.12 },
+          lineStyle: { width: 3 },
+          data: points.map((point) => point.value),
+        },
+      ],
+    })
+
+    const resize = () => chart.resize()
+    window.addEventListener('resize', resize)
+    return () => {
+      window.removeEventListener('resize', resize)
+      chart.dispose()
+    }
+  }, [points])
+
+  return <div className="position-echart" ref={chartRef} />
+}
+
+function CandleChart({ candles, markers }: { candles: Candle[]; markers: TradeMarker[] }) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return
+    }
+
+    const chart: IChartApi = createChart(containerRef.current, {
+      autoSize: true,
+      height: 330,
+      layout: {
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#475569',
+      },
+      grid: {
+        vertLines: { color: '#eef2f7' },
+        horzLines: { color: '#eef2f7' },
+      },
+      rightPriceScale: { borderColor: '#d7dee8' },
+      timeScale: { borderColor: '#d7dee8' },
+      crosshair: { mode: 1 },
+    })
+    const series: ISeriesApi<'Candlestick'> = chart.addSeries(CandlestickSeries, {
+      upColor: '#dc2626',
+      downColor: '#16a34a',
+      borderUpColor: '#dc2626',
+      borderDownColor: '#16a34a',
+      wickUpColor: '#dc2626',
+      wickDownColor: '#16a34a',
+    })
+
+    series.setData(
+      candles.map((candle) => ({
+        time: chartTime(candle.timestamp),
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      })),
+    )
+
+    createSeriesMarkers(
+      series,
+      markers.map(
+        (marker): SeriesMarker<Time> => ({
+          time: chartTime(marker.timestamp),
+          position: marker.side === 'buy' ? 'belowBar' : 'aboveBar',
+          color: marker.side === 'buy' ? '#16a34a' : '#dc2626',
+          shape: marker.side === 'buy' ? 'arrowUp' : 'arrowDown',
+          text: `${marker.side.toUpperCase()} ${marker.price}`,
+        }),
+      ),
+    )
+    chart.timeScale().fitContent()
+
+    return () => {
+      chart.remove()
+    }
+  }, [candles, markers])
+
+  return <div className="candle-chart" ref={containerRef} />
 }
 
 function App() {
@@ -152,9 +356,6 @@ function App() {
   const candles = result.candles ?? []
   const trades = result.trade_table ?? []
   const markers = result.trade_markers ?? []
-  const equityPath = buildLinePath(equityCurve, 760, 260)
-  const benchmarkPath = buildLinePath(benchmarkCurve, 760, 260)
-  const positionPath = buildLinePath(positionCurve, 360, 180)
 
   const metricCards = [
     { label: 'Cumulative Return', value: formatPercent(metrics.cumulative_return) },
@@ -208,15 +409,10 @@ function App() {
       <section className="chart-grid">
         <article className="panel wide">
           <header>
-            <h2>Equity Curve vs Benchmark</h2>
+            <h2>Equity, Benchmark and Drawdown</h2>
             <span>Latest equity {latestValue(equityCurve)?.toFixed(2) ?? '-'}</span>
           </header>
-          <div className="line-chart">
-            <svg viewBox="0 0 760 260" role="img" aria-label="strategy equity curve">
-              {benchmarkPath ? <path className="benchmark-line" d={benchmarkPath} /> : null}
-              {equityPath ? <path className="strategy-line" d={equityPath} /> : null}
-            </svg>
-          </div>
+          <CurveChart equityCurve={equityCurve} benchmarkCurve={benchmarkCurve} drawdownCurve={drawdownCurve} />
         </article>
 
         <article className="panel">
@@ -224,10 +420,9 @@ function App() {
             <h2>Drawdown</h2>
             <span>Risk observation</span>
           </header>
-          <div className="drawdown-bars">
-            {drawdownCurve.map((point) => (
-              <i key={point.timestamp} style={{ height: `${Math.max(Math.abs(point.value) * 100, 2)}%` }} />
-            ))}
+          <div className="risk-stat">
+            <strong>{formatPercent(metrics.max_drawdown)}</strong>
+            <span>Worst observed decline in the published snapshot</span>
           </div>
         </article>
 
@@ -236,11 +431,7 @@ function App() {
             <h2>Position Curve</h2>
             <span>Backend snapshot values</span>
           </header>
-          <div className="position-chart">
-            <svg viewBox="0 0 360 180" role="img" aria-label="position curve">
-              {positionPath ? <path className="position-line" d={positionPath} /> : null}
-            </svg>
-          </div>
+          <PositionChart points={positionCurve} />
         </article>
 
         <article className="panel wide">
@@ -248,25 +439,7 @@ function App() {
             <h2>Candles and Trade Markers</h2>
             <span>{markers.length} markers</span>
           </header>
-          <div className="candles">
-            {candles.map((candle, index) => (
-              <i
-                key={`${candle.timestamp}-${index}`}
-                className={candle.close >= candle.open ? 'up' : 'down'}
-                style={{ height: `${Math.max(Math.abs(candle.close - candle.open) * 40, 20)}px` }}
-                title={`${candle.timestamp} close ${candle.close}`}
-              />
-            ))}
-            {markers.slice(0, 6).map((marker, index) => (
-              <b
-                className={marker.side === 'buy' ? 'buy-marker' : 'sell-marker'}
-                key={`${marker.timestamp}-${marker.side}`}
-                style={{ left: `${18 + index * 11}%` }}
-              >
-                {marker.side === 'buy' ? 'B' : 'S'}
-              </b>
-            ))}
-          </div>
+          <CandleChart candles={candles} markers={markers} />
         </article>
       </section>
 
@@ -287,10 +460,10 @@ function App() {
           <tbody>
             {trades.map((trade, index) => (
               <tr key={index}>
-                <td>{String(trade.timestamp ?? '-')}</td>
-                <td>{String(trade.side ?? '-')}</td>
-                <td>{String(trade.price ?? '-')}</td>
-                <td>{String(trade.change_percent ?? '-')}</td>
+                <td>{formatTradeValue(trade.timestamp)}</td>
+                <td>{formatTradeValue(trade.side)}</td>
+                <td>{formatTradeValue(trade.price)}</td>
+                <td>{formatTradeValue(trade.change_percent)}</td>
               </tr>
             ))}
           </tbody>
