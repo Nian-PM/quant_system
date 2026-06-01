@@ -178,6 +178,8 @@ Expected behavior:
 - Records trades, positions, equity, drawdown, and metrics.
 - Outputs a reproducible result object for publishing.
 
+The first executable backtest slice is intentionally narrow: single instrument, stored bars, saved strategy parameter set, deterministic result generation. It stores `BacktestRun.metrics` and `BacktestRun.result_payload` with the same major groups expected by the future client snapshot: metrics, equity curve, benchmark curve, drawdown curve, candles, trade markers, position curve, trade table, and risk disclosure. Portfolio weighting, richer fill simulation, fee/slippage, and benchmark selection can be layered onto this contract.
+
 ### 5.6 Paper Simulation
 
 Paper simulation is quasi-real-time, not real exchange-grade order matching.

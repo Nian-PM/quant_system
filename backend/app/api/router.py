@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api import (
     auth,
+    backtests,
     health,
     instruments,
     market_data,
@@ -13,6 +14,7 @@ from app.api import (
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router)
+api_router.include_router(backtests.router)
 api_router.include_router(health.router)
 api_router.include_router(instruments.router)
 api_router.include_router(market_data.router)
