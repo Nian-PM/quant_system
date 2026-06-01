@@ -40,6 +40,7 @@ import {
   fetchBacktests,
   fetchMarketBars,
   fetchPortfolios,
+  fetchSnapshots,
   fetchStrategies,
   fetchStrategyParameterSets,
   createBacktest,
@@ -47,6 +48,8 @@ import {
   createPortfolio,
   createStrategyParameterSet,
   importCsvMarketData,
+  publishSnapshot,
+  revokeSnapshot,
   type BacktestInput,
   type BacktestRun,
   type Bar,
@@ -57,6 +60,8 @@ import {
   type InstrumentInput,
   type OperationLog,
   type Portfolio,
+  type PublishedSnapshot,
+  type SnapshotPublishInput,
   type StrategyParameter,
   type StrategyParameterSet,
   type StrategyTemplate,
@@ -91,6 +96,8 @@ function App() {
   const [bars, setBars] = useState<Bar[]>([])
   const [backtests, setBacktests] = useState<BacktestRun[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
+  const [snapshots, setSnapshots] = useState<PublishedSnapshot[]>([])
+  const [latestShareToken, setLatestShareToken] = useState('')
   const [strategyParameterSets, setStrategyParameterSets] = useState<StrategyParameterSet[]>([])
   const [operationLogs, setOperationLogs] = useState<OperationLog[]>([])
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
@@ -103,14 +110,18 @@ function App() {
   const [marketDataForm] = Form.useForm<CsvImportInput>()
   const [strategyParameterForm] = Form.useForm<Record<string, number | boolean | string>>()
   const [backtestForm] = Form.useForm<BacktestInput>()
+  const [snapshotForm] = Form.useForm<SnapshotPublishInput>()
   const [instrumentSaving, setInstrumentSaving] = useState(false)
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [marketDataImporting, setMarketDataImporting] = useState(false)
   const [strategyParameterSaving, setStrategyParameterSaving] = useState(false)
   const [backtestRunning, setBacktestRunning] = useState(false)
+  const [snapshotPublishing, setSnapshotPublishing] = useState(false)
+  const [snapshotRevokingId, setSnapshotRevokingId] = useState<number | null>(null)
   const [marketDataError, setMarketDataError] = useState('')
   const [strategyParameterError, setStrategyParameterError] = useState('')
   const [backtestError, setBacktestError] = useState('')
+  const [snapshotError, setSnapshotError] = useState('')
 
   const refreshAdminData = (accessToken: string) => {
     Promise.all([
@@ -122,6 +133,7 @@ function App() {
       fetchDataImportTasks(accessToken),
       fetchStrategyParameterSets(accessToken),
       fetchBacktests(accessToken),
+      fetchSnapshots(accessToken),
     ])
       .then(([
         strategyPayload,
@@ -132,6 +144,7 @@ function App() {
         importTaskPayload,
         strategyParameterSetPayload,
         backtestPayload,
+        snapshotPayload,
       ]) => {
         setStrategies(strategyPayload)
         setCurrentUser(profilePayload)
@@ -141,6 +154,7 @@ function App() {
         setDataImportTasks(importTaskPayload)
         setStrategyParameterSets(strategyParameterSetPayload)
         setBacktests(backtestPayload)
+        setSnapshots(snapshotPayload)
         setApiStatus('Connected')
 
         const firstInstrument = instrumentPayload[0]
@@ -160,6 +174,7 @@ function App() {
         setDataImportTasks([])
         setStrategyParameterSets([])
         setBacktests([])
+        setSnapshots([])
       })
   }
 
@@ -193,6 +208,15 @@ function App() {
       backtestForm.setFieldValue('parameter_set_id', strategyParameterSets[0].id)
     }
   }, [backtestForm, strategyParameterSets])
+
+  useEffect(() => {
+    if (backtests[0] && !snapshotForm.getFieldValue('backtest_run_id')) {
+      snapshotForm.setFieldsValue({
+        backtest_run_id: backtests[0].id,
+        title: `Strategy Report #${backtests[0].id}`,
+      })
+    }
+  }, [backtests, snapshotForm])
 
   useEffect(() => {
     const firstStrategy = strategies[0]
@@ -351,6 +375,47 @@ function App() {
       .finally(() => setBacktestRunning(false))
   }
 
+  const handlePublishSnapshot = (values: SnapshotPublishInput) => {
+    if (!token) {
+      return
+    }
+
+    setSnapshotPublishing(true)
+    setSnapshotError('')
+    setLatestShareToken('')
+    publishSnapshot(token, {
+      backtest_run_id: Number(values.backtest_run_id),
+      title: values.title || `Strategy Report #${values.backtest_run_id}`,
+    })
+      .then((payload) => {
+        setLatestShareToken(payload.share_token)
+        return Promise.all([fetchSnapshots(token), fetchOperationLogs(token)])
+      })
+      .then(([snapshotPayload, logPayload]) => {
+        setSnapshots(snapshotPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setSnapshotError(error instanceof Error ? error.message : 'Snapshot publish failed'))
+      .finally(() => setSnapshotPublishing(false))
+  }
+
+  const handleRevokeSnapshot = (snapshotId: number) => {
+    if (!token) {
+      return
+    }
+
+    setSnapshotRevokingId(snapshotId)
+    setSnapshotError('')
+    revokeSnapshot(token, snapshotId)
+      .then(() => Promise.all([fetchSnapshots(token), fetchOperationLogs(token)]))
+      .then(([snapshotPayload, logPayload]) => {
+        setSnapshots(snapshotPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setSnapshotError(error instanceof Error ? error.message : 'Snapshot revoke failed'))
+      .finally(() => setSnapshotRevokingId(null))
+  }
+
   const loginPanel = (
     <main className="login-shell">
       <Card className="login-card">
@@ -362,7 +427,7 @@ function App() {
               <Text type="secondary">Sign in to manage strategies, backtests, snapshots, and audit logs.</Text>
             </div>
           </div>
-          {loginError ? <Alert type="error" showIcon message={loginError} /> : null}
+          {loginError ? <Alert type="error" showIcon title={loginError} /> : null}
           <Form
             layout="vertical"
             initialValues={{ username: 'admin', password: 'admin' }}
@@ -458,8 +523,8 @@ function App() {
               <Card>
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">Published Snapshots</Text>
-                  <Title level={2}>{backtests.length}</Title>
-                  <Text>{backtests[0] ? `Latest ${backtests[0].status}` : 'Backtest before publishing'}</Text>
+                  <Title level={2}>{snapshots.length}</Title>
+                  <Text>{snapshots[0] ? `Latest ${snapshots[0].status}` : 'Publish a reviewed backtest'}</Text>
                 </Space>
               </Card>
               <Card>
@@ -472,8 +537,8 @@ function App() {
               <Card>
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">V1 Progress</Text>
-                  <Progress percent={45} size="small" />
-                  <Text>Data, strategy configs, and backtests connected</Text>
+                  <Progress percent={58} size="small" />
+                  <Text>Backtest publishing and share tokens connected</Text>
                 </Space>
               </Card>
             </section>
@@ -556,7 +621,7 @@ function App() {
               </Card>
 
               <Card title="Market Data Management">
-                {marketDataError ? <Alert type="error" showIcon message={marketDataError} className="form-alert" /> : null}
+                {marketDataError ? <Alert type="error" showIcon title={marketDataError} className="form-alert" /> : null}
                 <Form
                   form={marketDataForm}
                   layout="vertical"
@@ -628,7 +693,7 @@ function App() {
               </Card>
 
               <Card title="Strategy Template Management">
-                {strategyParameterError ? <Alert type="error" showIcon message={strategyParameterError} className="form-alert" /> : null}
+                {strategyParameterError ? <Alert type="error" showIcon title={strategyParameterError} className="form-alert" /> : null}
                 {strategies[0] ? (
                   <>
                     <Space orientation="vertical" size={4} className="strategy-summary">
@@ -700,7 +765,7 @@ function App() {
               </Card>
 
               <Card title="Backtest Task Management">
-                {backtestError ? <Alert type="error" showIcon message={backtestError} className="form-alert" /> : null}
+                {backtestError ? <Alert type="error" showIcon title={backtestError} className="form-alert" /> : null}
                 <Form
                   form={backtestForm}
                   layout="inline"
@@ -767,6 +832,71 @@ function App() {
                     },
                   ]}
                   dataSource={backtests.map((backtest) => ({ ...backtest, key: backtest.id }))}
+                />
+              </Card>
+
+              <Card title="Snapshot Publishing">
+                {snapshotError ? <Alert type="error" showIcon title={snapshotError} className="form-alert" /> : null}
+                {latestShareToken ? (
+                  <Alert
+                    type="success"
+                    showIcon
+                    className="form-alert"
+                    title="Share token generated"
+                    description={`/api/public/snapshots/${latestShareToken}`}
+                  />
+                ) : null}
+                <Form
+                  form={snapshotForm}
+                  layout="inline"
+                  initialValues={{
+                    backtest_run_id: backtests[0]?.id,
+                    title: backtests[0] ? `Strategy Report #${backtests[0].id}` : 'Rolling T Strategy Report',
+                  }}
+                  onFinish={handlePublishSnapshot}
+                  className="instrument-form"
+                >
+                  <Form.Item name="backtest_run_id" rules={[{ required: true }]}>
+                    <Input placeholder="Backtest Run ID" />
+                  </Form.Item>
+                  <Form.Item name="title" rules={[{ required: true }]}>
+                    <Input placeholder="Snapshot Title" />
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit" loading={snapshotPublishing} disabled={!backtests.length}>
+                    Publish Snapshot
+                  </Button>
+                </Form>
+                <Table
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'ID', dataIndex: 'id', width: 70 },
+                    { title: 'Title', dataIndex: 'title' },
+                    { title: 'Backtest', dataIndex: 'backtest_run_id', width: 100 },
+                    { title: 'Version', dataIndex: 'version', width: 90 },
+                    {
+                      title: 'Status',
+                      dataIndex: 'status',
+                      width: 110,
+                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{status}</Tag>,
+                    },
+                    {
+                      title: 'Action',
+                      dataIndex: 'id',
+                      width: 120,
+                      render: (snapshotId: number, snapshot: PublishedSnapshot) => (
+                        <Button
+                          size="small"
+                          onClick={() => handleRevokeSnapshot(snapshotId)}
+                          loading={snapshotRevokingId === snapshotId}
+                          disabled={snapshot.status !== 'published'}
+                        >
+                          Revoke
+                        </Button>
+                      ),
+                    },
+                  ]}
+                  dataSource={snapshots.map((snapshot) => ({ ...snapshot, key: snapshot.id }))}
                 />
               </Card>
 

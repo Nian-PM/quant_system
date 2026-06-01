@@ -155,6 +155,27 @@ export type BacktestInput = {
   initial_cash: number
 }
 
+export type PublishedSnapshot = {
+  id: number
+  backtest_run_id: number
+  version: number
+  status: string
+  title: string
+  immutable_payload: Record<string, unknown>
+  published_at: string | null
+  created_at: string
+}
+
+export type SnapshotPublishInput = {
+  backtest_run_id: number
+  title: string
+}
+
+export type SnapshotPublishResponse = {
+  snapshot: PublishedSnapshot
+  share_token: string
+}
+
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -305,5 +326,32 @@ export async function createBacktest(token: string, input: BacktestInput): Promi
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  })
+}
+
+export async function fetchSnapshots(token: string): Promise<PublishedSnapshot[]> {
+  return requestJson<PublishedSnapshot[]>('/snapshots', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function publishSnapshot(token: string, input: SnapshotPublishInput): Promise<SnapshotPublishResponse> {
+  return requestJson<SnapshotPublishResponse>('/snapshots/publish', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
+export async function revokeSnapshot(token: string, snapshotId: number): Promise<PublishedSnapshot> {
+  return requestJson<PublishedSnapshot>(`/snapshots/${snapshotId}/revoke`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 }
