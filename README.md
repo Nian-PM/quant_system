@@ -62,7 +62,12 @@ Default local URLs:
 - Metadata-driven strategy registry endpoint.
 - CSV market data import through the admin frontend.
 - Recent bar query and data import task list.
-- Operation logs for login, instrument, portfolio, and market data actions.
+- Saved strategy parameter sets generated from backend strategy metadata.
+- Single-instrument rolling T/grid backtests using stored bars.
+- Manual paper simulation runs using the same backend strategy path.
+- Immutable snapshot publishing with revocation and tokenized client report links.
+- Client display report page that loads published snapshots by token.
+- Operation logs for login, instrument, portfolio, market data, strategy, backtest, paper run, and snapshot actions.
 
 CSV market data import currently expects:
 

@@ -155,6 +155,34 @@ export type BacktestInput = {
   initial_cash: number
 }
 
+export type PaperRun = {
+  id: number
+  strategy_id: string
+  status: string
+  config: {
+    instrument_id?: number
+    frequency?: string
+    parameter_set_id?: number
+    initial_cash?: number
+    metrics?: {
+      trade_count?: number
+      latest_signal?: string
+      latest_position_percent?: number
+    }
+    result_payload?: Record<string, unknown>
+  }
+  latest_equity: number
+  message: string
+  created_at: string
+}
+
+export type PaperRunInput = {
+  instrument_id: number
+  frequency: string
+  parameter_set_id: number
+  initial_cash: number
+}
+
 export type PublishedSnapshot = {
   id: number
   backtest_run_id: number
@@ -321,6 +349,24 @@ export async function fetchBacktests(token: string): Promise<BacktestRun[]> {
 
 export async function createBacktest(token: string, input: BacktestInput): Promise<BacktestRun> {
   return requestJson<BacktestRun>('/backtests', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchPaperRuns(token: string): Promise<PaperRun[]> {
+  return requestJson<PaperRun[]>('/paper-runs', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function createPaperRun(token: string, input: PaperRunInput): Promise<PaperRun> {
+  return requestJson<PaperRun>('/paper-runs', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

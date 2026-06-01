@@ -39,12 +39,14 @@ import {
   fetchDataImportTasks,
   fetchBacktests,
   fetchMarketBars,
+  fetchPaperRuns,
   fetchPortfolios,
   fetchSnapshots,
   fetchStrategies,
   fetchStrategyParameterSets,
   createBacktest,
   createInstrument,
+  createPaperRun,
   createPortfolio,
   createStrategyParameterSet,
   importCsvMarketData,
@@ -59,6 +61,8 @@ import {
   type Instrument,
   type InstrumentInput,
   type OperationLog,
+  type PaperRun,
+  type PaperRunInput,
   type Portfolio,
   type PublishedSnapshot,
   type SnapshotPublishInput,
@@ -100,6 +104,7 @@ function App() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [bars, setBars] = useState<Bar[]>([])
   const [backtests, setBacktests] = useState<BacktestRun[]>([])
+  const [paperRuns, setPaperRuns] = useState<PaperRun[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
   const [snapshots, setSnapshots] = useState<PublishedSnapshot[]>([])
   const [latestShareToken, setLatestShareToken] = useState('')
@@ -115,17 +120,20 @@ function App() {
   const [marketDataForm] = Form.useForm<CsvImportInput>()
   const [strategyParameterForm] = Form.useForm<Record<string, number | boolean | string>>()
   const [backtestForm] = Form.useForm<BacktestInput>()
+  const [paperRunForm] = Form.useForm<PaperRunInput>()
   const [snapshotForm] = Form.useForm<SnapshotPublishInput>()
   const [instrumentSaving, setInstrumentSaving] = useState(false)
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [marketDataImporting, setMarketDataImporting] = useState(false)
   const [strategyParameterSaving, setStrategyParameterSaving] = useState(false)
   const [backtestRunning, setBacktestRunning] = useState(false)
+  const [paperRunStarting, setPaperRunStarting] = useState(false)
   const [snapshotPublishing, setSnapshotPublishing] = useState(false)
   const [snapshotRevokingId, setSnapshotRevokingId] = useState<number | null>(null)
   const [marketDataError, setMarketDataError] = useState('')
   const [strategyParameterError, setStrategyParameterError] = useState('')
   const [backtestError, setBacktestError] = useState('')
+  const [paperRunError, setPaperRunError] = useState('')
   const [snapshotError, setSnapshotError] = useState('')
 
   const refreshAdminData = (accessToken: string) => {
@@ -138,6 +146,7 @@ function App() {
       fetchDataImportTasks(accessToken),
       fetchStrategyParameterSets(accessToken),
       fetchBacktests(accessToken),
+      fetchPaperRuns(accessToken),
       fetchSnapshots(accessToken),
     ])
       .then(([
@@ -149,6 +158,7 @@ function App() {
         importTaskPayload,
         strategyParameterSetPayload,
         backtestPayload,
+        paperRunPayload,
         snapshotPayload,
       ]) => {
         setStrategies(strategyPayload)
@@ -159,6 +169,7 @@ function App() {
         setDataImportTasks(importTaskPayload)
         setStrategyParameterSets(strategyParameterSetPayload)
         setBacktests(backtestPayload)
+        setPaperRuns(paperRunPayload)
         setSnapshots(snapshotPayload)
         setApiStatus('Connected')
 
@@ -179,6 +190,7 @@ function App() {
         setDataImportTasks([])
         setStrategyParameterSets([])
         setBacktests([])
+        setPaperRuns([])
         setSnapshots([])
       })
   }
@@ -206,13 +218,19 @@ function App() {
     if (instruments[0] && !backtestForm.getFieldValue('instrument_id')) {
       backtestForm.setFieldValue('instrument_id', instruments[0].id)
     }
-  }, [backtestForm, instruments, marketDataForm, portfolioForm])
+    if (instruments[0] && !paperRunForm.getFieldValue('instrument_id')) {
+      paperRunForm.setFieldValue('instrument_id', instruments[0].id)
+    }
+  }, [backtestForm, instruments, marketDataForm, paperRunForm, portfolioForm])
 
   useEffect(() => {
     if (strategyParameterSets[0] && !backtestForm.getFieldValue('parameter_set_id')) {
       backtestForm.setFieldValue('parameter_set_id', strategyParameterSets[0].id)
     }
-  }, [backtestForm, strategyParameterSets])
+    if (strategyParameterSets[0] && !paperRunForm.getFieldValue('parameter_set_id')) {
+      paperRunForm.setFieldValue('parameter_set_id', strategyParameterSets[0].id)
+    }
+  }, [backtestForm, paperRunForm, strategyParameterSets])
 
   useEffect(() => {
     if (backtests[0] && !snapshotForm.getFieldValue('backtest_run_id')) {
@@ -258,6 +276,12 @@ function App() {
     setOperationLogs([])
     setInstruments([])
     setPortfolios([])
+    setBars([])
+    setDataImportTasks([])
+    setStrategyParameterSets([])
+    setBacktests([])
+    setPaperRuns([])
+    setSnapshots([])
   }
 
   const handleCreateInstrument = (values: InstrumentInput) => {
@@ -378,6 +402,28 @@ function App() {
       })
       .catch((error) => setBacktestError(error instanceof Error ? error.message : 'Backtest failed'))
       .finally(() => setBacktestRunning(false))
+  }
+
+  const handleCreatePaperRun = (values: PaperRunInput) => {
+    if (!token) {
+      return
+    }
+
+    setPaperRunStarting(true)
+    setPaperRunError('')
+    createPaperRun(token, {
+      instrument_id: Number(values.instrument_id),
+      frequency: values.frequency || '5m',
+      parameter_set_id: Number(values.parameter_set_id),
+      initial_cash: Number(values.initial_cash || 100000),
+    })
+      .then(() => Promise.all([fetchPaperRuns(token), fetchOperationLogs(token)]))
+      .then(([paperRunPayload, logPayload]) => {
+        setPaperRuns(paperRunPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setPaperRunError(error instanceof Error ? error.message : 'Paper simulation failed'))
+      .finally(() => setPaperRunStarting(false))
   }
 
   const handlePublishSnapshot = (values: SnapshotPublishInput) => {
@@ -534,6 +580,13 @@ function App() {
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
+                  <Text type="secondary">Paper Runs</Text>
+                  <Title level={2}>{paperRuns.length}</Title>
+                  <Text>{paperRuns[0] ? `Latest equity ${paperRuns[0].latest_equity.toFixed(2)}` : 'Run a manual simulation'}</Text>
+                </Space>
+              </Card>
+              <Card>
+                <Space orientation="vertical" size={4}>
                   <Text type="secondary">Imported Bars</Text>
                   <Title level={2}>{bars.length}</Title>
                   <Text>{bars[0] ? `${bars[0].frequency} latest ${bars[bars.length - 1]?.close}` : 'Import CSV market data'}</Text>
@@ -542,8 +595,8 @@ function App() {
               <Card>
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">V1 Progress</Text>
-                  <Progress percent={58} size="small" />
-                  <Text>Backtest publishing and share tokens connected</Text>
+                  <Progress percent={64} size="small" />
+                  <Text>Manual paper simulation connected</Text>
                 </Space>
               </Card>
             </section>
@@ -837,6 +890,77 @@ function App() {
                     },
                   ]}
                   dataSource={backtests.map((backtest) => ({ ...backtest, key: backtest.id }))}
+                />
+              </Card>
+
+              <Card title="Paper Simulation Management">
+                {paperRunError ? <Alert type="error" showIcon title={paperRunError} className="form-alert" /> : null}
+                <Form
+                  form={paperRunForm}
+                  layout="inline"
+                  initialValues={{
+                    instrument_id: instruments[0]?.id,
+                    frequency: '5m',
+                    parameter_set_id: strategyParameterSets[0]?.id,
+                    initial_cash: 100000,
+                  }}
+                  onFinish={handleCreatePaperRun}
+                  className="instrument-form"
+                >
+                  <Form.Item name="instrument_id" rules={[{ required: true }]}>
+                    <Input placeholder="Instrument ID" />
+                  </Form.Item>
+                  <Form.Item name="frequency" rules={[{ required: true }]}>
+                    <Input placeholder="5m" />
+                  </Form.Item>
+                  <Form.Item name="parameter_set_id" rules={[{ required: true }]}>
+                    <Input placeholder="Parameter Set ID" />
+                  </Form.Item>
+                  <Form.Item name="initial_cash" rules={[{ required: true }]}>
+                    <InputNumber min={1} placeholder="Initial Cash" />
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit" loading={paperRunStarting} disabled={!instruments.length || !strategyParameterSets.length}>
+                    Run Paper Simulation
+                  </Button>
+                </Form>
+                <Table
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'ID', dataIndex: 'id', width: 70 },
+                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    {
+                      title: 'Status',
+                      dataIndex: 'status',
+                      width: 110,
+                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{status}</Tag>,
+                    },
+                    {
+                      title: 'Latest Equity',
+                      dataIndex: 'latest_equity',
+                      width: 130,
+                      render: (value: number) => value.toFixed(2),
+                    },
+                    {
+                      title: 'Latest Signal',
+                      dataIndex: 'config',
+                      width: 130,
+                      render: (config: PaperRun['config']) => config.metrics?.latest_signal ?? 'hold',
+                    },
+                    {
+                      title: 'Position',
+                      dataIndex: 'config',
+                      width: 110,
+                      render: (config: PaperRun['config']) => `${config.metrics?.latest_position_percent ?? 0}%`,
+                    },
+                    {
+                      title: 'Trades',
+                      dataIndex: 'config',
+                      width: 90,
+                      render: (config: PaperRun['config']) => config.metrics?.trade_count ?? 0,
+                    },
+                  ]}
+                  dataSource={paperRuns.map((paperRun) => ({ ...paperRun, key: paperRun.id }))}
                 />
               </Card>
 
