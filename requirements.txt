@@ -1,0 +1,12 @@
+vnpy==4.4.0
+vnpy_algotrading==1.1.0
+vnpy_chartwizard==1.1.0
+vnpy_ctabacktester==1.3.0
+vnpy_ctastrategy==1.4.1
+vnpy_datamanager==1.2.0
+vnpy_datarecorder==1.1.1
+vnpy_paperaccount==1.0.6
+vnpy_portfoliostrategy==1.3.0
+vnpy_riskmanager==2.0.0
+vnpy_spreadtrading==1.4.0
+vnpy_sqlite==1.1.3
