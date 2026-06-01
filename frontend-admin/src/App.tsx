@@ -71,6 +71,7 @@ import './App.css'
 
 const { Header, Sider, Content } = Layout
 const { Text, Title } = Typography
+const DISPLAY_BASE_URL = import.meta.env.VITE_DISPLAY_BASE_URL ?? 'http://127.0.0.1:5184'
 
 const modules = [
   { key: 'portfolios', icon: <StockOutlined />, label: 'Portfolios' },
@@ -88,6 +89,10 @@ const tasks = [
   { key: 2, name: '600519.SH 5m data sync', type: 'Data', status: 'Succeeded', updatedAt: '2026-06-01 09:42' },
   { key: 3, name: 'rolling_t_grid paper run', type: 'Paper', status: 'Running', updatedAt: '2026-06-01 09:30' },
 ]
+
+function clientReportUrl(shareToken: string): string {
+  return `${DISPLAY_BASE_URL.replace(/\/$/, '')}/?token=${encodeURIComponent(shareToken)}`
+}
 
 function App() {
   const [strategies, setStrategies] = useState<StrategyTemplate[]>([])
@@ -842,8 +847,8 @@ function App() {
                     type="success"
                     showIcon
                     className="form-alert"
-                    title="Share token generated"
-                    description={`/api/public/snapshots/${latestShareToken}`}
+                    title="Client report link generated"
+                    description={clientReportUrl(latestShareToken)}
                   />
                 ) : null}
                 <Form
