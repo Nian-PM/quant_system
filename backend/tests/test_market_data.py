@@ -68,6 +68,60 @@ def test_admin_can_import_and_query_csv_bars() -> None:
         assert "market_data.import_csv.succeeded" in actions
 
 
+def test_admin_can_check_market_data_completeness() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+        instrument_id = create_instrument(client, token, "TCSV11")
+
+        import_response = client.post(
+            "/api/market-data/import-csv",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "instrument_id": instrument_id,
+                "frequency": "5m",
+                "source": "csv",
+                "csv_text": (
+                    "timestamp,open,high,low,close,volume\n"
+                    "2026-01-02 09:35:00,10,10.5,9.8,10.2,1000\n"
+                    "2026-01-02 09:45:00,10.2,10.8,10.1,10.7,1200\n"
+                ),
+            },
+        )
+        assert import_response.status_code == 200
+
+        response = client.get(
+            f"/api/market-data/completeness?instrument_id={instrument_id}&frequency=5m",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        completeness = response.json()
+        assert completeness["status"] == "warning"
+        assert completeness["bar_count"] == 2
+        assert completeness["expected_bar_count"] == 3
+        assert completeness["missing_bar_count"] == 1
+        assert completeness["gap_count"] == 1
+        assert completeness["largest_gap_minutes"] == 10
+        assert completeness["completeness_ratio"] == 0.666667
+
+
+def test_completeness_reports_empty_data_clearly() -> None:
+    with TestClient(app) as client:
+        token = login_token(client)
+        instrument_id = create_instrument(client, token, "TCSV12")
+
+        response = client.get(
+            f"/api/market-data/completeness?instrument_id={instrument_id}&frequency=5m",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        completeness = response.json()
+        assert completeness["status"] == "empty"
+        assert completeness["bar_count"] == 0
+        assert completeness["message"].startswith("No bars found")
+
+
 def test_reimport_updates_existing_bar_without_duplicates() -> None:
     with TestClient(app) as client:
         token = login_token(client)

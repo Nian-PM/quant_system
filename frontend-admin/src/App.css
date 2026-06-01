@@ -97,6 +97,27 @@
   gap: 12px;
 }
 
+.data-quality-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.data-quality-panel > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.data-quality-panel .ant-space {
+  grid-column: 1 / -1;
+}
+
 .strategy-summary,
 .strategy-parameter-form {
   margin-bottom: 16px;
@@ -199,6 +220,7 @@
 @media (max-width: 1080px) {
   .metric-grid,
   .workspace,
+  .data-quality-panel,
   .review-metrics,
   .review-chart-grid {
     grid-template-columns: 1fr;

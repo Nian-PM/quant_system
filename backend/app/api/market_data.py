@@ -7,6 +7,7 @@ from sqlmodel import select
 from app.core.database import SessionDep
 from app.core.security import get_current_user
 from app.models import Bar, DataImportTask, Instrument, TaskStatus, User, utc_now
+from app.services.data_quality import DataCompleteness, assess_bar_completeness
 from app.services.market_data import fetch_public_bars, import_csv_bars
 from app.services.operation_log import record_operation
 
@@ -52,6 +53,22 @@ class BarResponse(BaseModel):
     volume: float
     source: str
     data_version: str
+
+
+class DataCompletenessResponse(BaseModel):
+    instrument_id: int
+    frequency: str
+    bar_count: int
+    first_timestamp: datetime | None
+    last_timestamp: datetime | None
+    expected_interval_minutes: int | None
+    expected_bar_count: int | None
+    missing_bar_count: int | None
+    completeness_ratio: float | None
+    gap_count: int
+    largest_gap_minutes: float | None
+    status: str
+    message: str
 
 
 def task_response(task: DataImportTask) -> DataImportTaskResponse:
@@ -264,6 +281,53 @@ def list_bars(
     )
     bars = list(reversed(session.exec(statement).all()))
     return [bar_response(bar) for bar in bars]
+
+
+def completeness_response(completeness: DataCompleteness) -> DataCompletenessResponse:
+    return DataCompletenessResponse(
+        instrument_id=completeness.instrument_id,
+        frequency=completeness.frequency,
+        bar_count=completeness.bar_count,
+        first_timestamp=completeness.first_timestamp,
+        last_timestamp=completeness.last_timestamp,
+        expected_interval_minutes=completeness.expected_interval_minutes,
+        expected_bar_count=completeness.expected_bar_count,
+        missing_bar_count=completeness.missing_bar_count,
+        completeness_ratio=completeness.completeness_ratio,
+        gap_count=completeness.gap_count,
+        largest_gap_minutes=completeness.largest_gap_minutes,
+        status=completeness.status,
+        message=completeness.message,
+    )
+
+
+@router.get("/completeness", response_model=DataCompletenessResponse)
+def check_data_completeness(
+    session: SessionDep,
+    instrument_id: int = Query(gt=0),
+    frequency: str = Query(min_length=1),
+    current_user: User = Depends(get_current_user),
+) -> DataCompletenessResponse:
+    instrument = session.get(Instrument, instrument_id)
+    if not instrument:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown instrument id: {instrument_id}",
+        )
+
+    normalized_frequency = frequency.strip().lower()
+    statement = (
+        select(Bar)
+        .where(Bar.instrument_id == instrument_id, Bar.frequency == normalized_frequency)
+        .order_by(Bar.timestamp)
+    )
+    return completeness_response(
+        assess_bar_completeness(
+            instrument_id=instrument_id,
+            frequency=normalized_frequency,
+            bars=session.exec(statement).all(),
+        )
+    )
 
 
 @router.get("/import-tasks", response_model=list[DataImportTaskResponse])

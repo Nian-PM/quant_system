@@ -39,6 +39,7 @@ import {
   fetchDataImportTasks,
   fetchBacktests,
   fetchMarketBars,
+  fetchMarketDataCompleteness,
   fetchMarketDataSchedules,
   fetchPaperRuns,
   fetchPortfolios,
@@ -65,6 +66,7 @@ import {
   type Bar,
   type CsvImportInput,
   type DataImportTask,
+  type DataCompleteness,
   login,
   type Instrument,
   type InstrumentInput,
@@ -118,6 +120,14 @@ function formatNumber(value: number | undefined): string {
   return (value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
+function formatDateTime(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString() : '-'
+}
+
+function formatRatio(value: number | null | undefined): string {
+  return value === null || value === undefined ? '-' : `${(value * 100).toFixed(2)}%`
+}
+
 function chartPoints(series: Array<{ value: number }> = [], width = 360, height = 120): string {
   if (!series.length) {
     return ''
@@ -150,6 +160,7 @@ function App() {
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [bars, setBars] = useState<Bar[]>([])
+  const [dataCompleteness, setDataCompleteness] = useState<DataCompleteness | null>(null)
   const [backtests, setBacktests] = useState<BacktestRun[]>([])
   const [paperRuns, setPaperRuns] = useState<PaperRun[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
@@ -178,6 +189,7 @@ function App() {
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [marketDataImporting, setMarketDataImporting] = useState(false)
   const [publicDataFetching, setPublicDataFetching] = useState(false)
+  const [dataCompletenessChecking, setDataCompletenessChecking] = useState(false)
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [scheduleActionId, setScheduleActionId] = useState<number | null>(null)
   const [strategyParameterSaving, setStrategyParameterSaving] = useState(false)
@@ -241,8 +253,10 @@ function App() {
         const firstInstrument = instrumentPayload[0]
         if (firstInstrument) {
           fetchMarketBars(accessToken, firstInstrument.id).then(setBars).catch(() => setBars([]))
+          fetchMarketDataCompleteness(accessToken, firstInstrument.id).then(setDataCompleteness).catch(() => setDataCompleteness(null))
         } else {
           setBars([])
+          setDataCompleteness(null)
         }
       })
       .catch(() => {
@@ -252,6 +266,7 @@ function App() {
         setInstruments([])
         setPortfolios([])
         setBars([])
+        setDataCompleteness(null)
         setDataImportTasks([])
         setMarketDataSchedules([])
         setStrategyParameterSets([])
@@ -351,6 +366,7 @@ function App() {
     setInstruments([])
     setPortfolios([])
     setBars([])
+    setDataCompleteness(null)
     setDataImportTasks([])
     setMarketDataSchedules([])
     setStrategyParameterSets([])
@@ -410,12 +426,14 @@ function App() {
         const instrumentId = Number(values.instrument_id)
         return Promise.all([
           fetchMarketBars(token, instrumentId, values.frequency || '5m'),
+          fetchMarketDataCompleteness(token, instrumentId, values.frequency || '5m'),
           fetchDataImportTasks(token),
           fetchOperationLogs(token),
         ])
       })
-      .then(([barPayload, importTaskPayload, logPayload]) => {
+      .then(([barPayload, completenessPayload, importTaskPayload, logPayload]) => {
         setBars(barPayload)
+        setDataCompleteness(completenessPayload)
         setDataImportTasks(importTaskPayload)
         setOperationLogs(logPayload)
       })
@@ -440,12 +458,14 @@ function App() {
         const instrumentId = Number(values.instrument_id)
         return Promise.all([
           fetchMarketBars(token, instrumentId, values.frequency || '5m'),
+          fetchMarketDataCompleteness(token, instrumentId, values.frequency || '5m'),
           fetchDataImportTasks(token),
           fetchOperationLogs(token),
         ])
       })
-      .then(([barPayload, importTaskPayload, logPayload]) => {
+      .then(([barPayload, completenessPayload, importTaskPayload, logPayload]) => {
         setBars(barPayload)
+        setDataCompleteness(completenessPayload)
         setDataImportTasks(importTaskPayload)
         setOperationLogs(logPayload)
       })
@@ -474,6 +494,25 @@ function App() {
       })
       .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Schedule save failed'))
       .finally(() => setScheduleSaving(false))
+  }
+
+  const handleCheckDataCompleteness = () => {
+    if (!token) {
+      return
+    }
+
+    const instrumentId = Number(marketDataForm.getFieldValue('instrument_id') || instruments[0]?.id)
+    const frequency = String(marketDataForm.getFieldValue('frequency') || '5m')
+    if (!instrumentId) {
+      return
+    }
+
+    setDataCompletenessChecking(true)
+    setMarketDataError('')
+    fetchMarketDataCompleteness(token, instrumentId, frequency)
+      .then(setDataCompleteness)
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Data completeness check failed'))
+      .finally(() => setDataCompletenessChecking(false))
   }
 
   const handleRunMarketDataSchedule = (scheduleId: number) => {
@@ -972,6 +1011,37 @@ function App() {
                     Fetch Public Bars
                   </Button>
                 </Form>
+                <div className="data-quality-panel">
+                  <div>
+                    <Text strong>Data Completeness</Text>
+                    <Text type="secondary">{dataCompleteness?.message ?? 'Check selected instrument data before backtests.'}</Text>
+                  </div>
+                  <Space wrap>
+                    <Tag
+                      color={
+                        dataCompleteness?.status === 'ok'
+                          ? 'green'
+                          : dataCompleteness?.status === 'warning'
+                            ? 'orange'
+                            : dataCompleteness?.status === 'empty'
+                              ? 'red'
+                              : 'default'
+                      }
+                    >
+                      {dataCompleteness?.status ?? 'unchecked'}
+                    </Tag>
+                    <Text>Bars: {dataCompleteness?.bar_count ?? '-'}</Text>
+                    <Text>Completeness: {formatRatio(dataCompleteness?.completeness_ratio)}</Text>
+                    <Text>Missing: {dataCompleteness?.missing_bar_count ?? '-'}</Text>
+                    <Text>Gaps: {dataCompleteness?.gap_count ?? '-'}</Text>
+                    <Text>Largest Gap: {dataCompleteness?.largest_gap_minutes ?? '-'} min</Text>
+                    <Text>First: {formatDateTime(dataCompleteness?.first_timestamp)}</Text>
+                    <Text>Last: {formatDateTime(dataCompleteness?.last_timestamp)}</Text>
+                  </Space>
+                  <Button onClick={handleCheckDataCompleteness} loading={dataCompletenessChecking} disabled={!instruments.length}>
+                    Check Completeness
+                  </Button>
+                </div>
                 <Table
                   size="small"
                   pagination={{ pageSize: 5 }}

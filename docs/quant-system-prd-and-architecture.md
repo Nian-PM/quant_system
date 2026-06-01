@@ -283,6 +283,8 @@ Import rules:
 
 The first admin UI includes a textarea-based CSV importer plus manual and scheduled public-data fetch tasks. Public fetch uses akshare when it is installed and records a failed task with a clear message when the provider is unavailable or returns no data. APScheduler registers active interval schedules at backend startup; admins can create, run, and disable schedules. File upload can be layered on top of the same backend service later.
 
+The backend also exposes a market-data completeness check for one instrument and frequency. It reports bar count, first/last timestamp, inferred expected interval, missing bars estimated from abnormal timestamp gaps, largest gap, completeness ratio, and a status of `ok`, `warning`, `empty`, or `unknown_frequency`. This is a pre-backtest operational check, not a full exchange-calendar validator; A-share trading-session calendars can refine the same contract later.
+
 ## 8. Suggested Data Objects
 
 | Object | Purpose |

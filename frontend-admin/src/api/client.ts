@@ -103,6 +103,22 @@ export type Bar = {
   data_version: string
 }
 
+export type DataCompleteness = {
+  instrument_id: number
+  frequency: string
+  bar_count: number
+  first_timestamp: string | null
+  last_timestamp: string | null
+  expected_interval_minutes: number | null
+  expected_bar_count: number | null
+  missing_bar_count: number | null
+  completeness_ratio: number | null
+  gap_count: number
+  largest_gap_minutes: number | null
+  status: string
+  message: string
+}
+
 export type CsvImportInput = {
   instrument_id: number
   frequency: string
@@ -373,6 +389,22 @@ export async function fetchMarketBars(
     limit: '20',
   })
   return requestJson<Bar[]>(`/market-data/bars?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function fetchMarketDataCompleteness(
+  token: string,
+  instrumentId: number,
+  frequency = '5m',
+): Promise<DataCompleteness> {
+  const params = new URLSearchParams({
+    instrument_id: String(instrumentId),
+    frequency,
+  })
+  return requestJson<DataCompleteness>(`/market-data/completeness?${params.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
