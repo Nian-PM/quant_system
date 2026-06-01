@@ -124,6 +124,37 @@ export type StrategyParameterSetInput = {
   parameters: Record<string, number | boolean | string>
 }
 
+export type BacktestRun = {
+  id: number
+  strategy_id: string
+  parameter_set_id: number | null
+  status: string
+  config: Record<string, unknown>
+  metrics: {
+    bar_count?: number
+    trade_count?: number
+    cumulative_return?: number
+    max_drawdown?: number
+    win_rate?: number
+    profit_loss_ratio?: number
+  }
+  result_payload: {
+    equity_curve?: Array<{ timestamp: string; value: number }>
+    drawdown_curve?: Array<{ timestamp: string; value: number }>
+    trade_markers?: Array<{ timestamp: string; side: string; price: number }>
+    trade_table?: Array<Record<string, unknown>>
+  }
+  message: string
+  created_at: string
+}
+
+export type BacktestInput = {
+  instrument_id: number
+  frequency: string
+  parameter_set_id: number
+  initial_cash: number
+}
+
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -251,6 +282,24 @@ export async function createStrategyParameterSet(
   input: StrategyParameterSetInput,
 ): Promise<StrategyParameterSet> {
   return requestJson<StrategyParameterSet>('/strategy-parameter-sets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchBacktests(token: string): Promise<BacktestRun[]> {
+  return requestJson<BacktestRun[]>('/backtests', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function createBacktest(token: string, input: BacktestInput): Promise<BacktestRun> {
+  return requestJson<BacktestRun>('/backtests', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

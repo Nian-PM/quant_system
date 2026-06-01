@@ -37,14 +37,18 @@ import {
   fetchProfile,
   fetchInstruments,
   fetchDataImportTasks,
+  fetchBacktests,
   fetchMarketBars,
   fetchPortfolios,
   fetchStrategies,
   fetchStrategyParameterSets,
+  createBacktest,
   createInstrument,
   createPortfolio,
   createStrategyParameterSet,
   importCsvMarketData,
+  type BacktestInput,
+  type BacktestRun,
   type Bar,
   type CsvImportInput,
   type DataImportTask,
@@ -85,6 +89,7 @@ function App() {
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [bars, setBars] = useState<Bar[]>([])
+  const [backtests, setBacktests] = useState<BacktestRun[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
   const [strategyParameterSets, setStrategyParameterSets] = useState<StrategyParameterSet[]>([])
   const [operationLogs, setOperationLogs] = useState<OperationLog[]>([])
@@ -97,12 +102,15 @@ function App() {
   const [portfolioForm] = Form.useForm<{ name: string; description: string; instrument_id: number; weight: number }>()
   const [marketDataForm] = Form.useForm<CsvImportInput>()
   const [strategyParameterForm] = Form.useForm<Record<string, number | boolean | string>>()
+  const [backtestForm] = Form.useForm<BacktestInput>()
   const [instrumentSaving, setInstrumentSaving] = useState(false)
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [marketDataImporting, setMarketDataImporting] = useState(false)
   const [strategyParameterSaving, setStrategyParameterSaving] = useState(false)
+  const [backtestRunning, setBacktestRunning] = useState(false)
   const [marketDataError, setMarketDataError] = useState('')
   const [strategyParameterError, setStrategyParameterError] = useState('')
+  const [backtestError, setBacktestError] = useState('')
 
   const refreshAdminData = (accessToken: string) => {
     Promise.all([
@@ -113,6 +121,7 @@ function App() {
       fetchPortfolios(accessToken),
       fetchDataImportTasks(accessToken),
       fetchStrategyParameterSets(accessToken),
+      fetchBacktests(accessToken),
     ])
       .then(([
         strategyPayload,
@@ -122,6 +131,7 @@ function App() {
         portfolioPayload,
         importTaskPayload,
         strategyParameterSetPayload,
+        backtestPayload,
       ]) => {
         setStrategies(strategyPayload)
         setCurrentUser(profilePayload)
@@ -130,6 +140,7 @@ function App() {
         setPortfolios(portfolioPayload)
         setDataImportTasks(importTaskPayload)
         setStrategyParameterSets(strategyParameterSetPayload)
+        setBacktests(backtestPayload)
         setApiStatus('Connected')
 
         const firstInstrument = instrumentPayload[0]
@@ -148,6 +159,7 @@ function App() {
         setBars([])
         setDataImportTasks([])
         setStrategyParameterSets([])
+        setBacktests([])
       })
   }
 
@@ -171,7 +183,16 @@ function App() {
     if (instruments[0] && !marketDataForm.getFieldValue('instrument_id')) {
       marketDataForm.setFieldValue('instrument_id', instruments[0].id)
     }
-  }, [instruments, marketDataForm, portfolioForm])
+    if (instruments[0] && !backtestForm.getFieldValue('instrument_id')) {
+      backtestForm.setFieldValue('instrument_id', instruments[0].id)
+    }
+  }, [backtestForm, instruments, marketDataForm, portfolioForm])
+
+  useEffect(() => {
+    if (strategyParameterSets[0] && !backtestForm.getFieldValue('parameter_set_id')) {
+      backtestForm.setFieldValue('parameter_set_id', strategyParameterSets[0].id)
+    }
+  }, [backtestForm, strategyParameterSets])
 
   useEffect(() => {
     const firstStrategy = strategies[0]
@@ -308,6 +329,28 @@ function App() {
       .finally(() => setStrategyParameterSaving(false))
   }
 
+  const handleCreateBacktest = (values: BacktestInput) => {
+    if (!token) {
+      return
+    }
+
+    setBacktestRunning(true)
+    setBacktestError('')
+    createBacktest(token, {
+      instrument_id: Number(values.instrument_id),
+      frequency: values.frequency || '5m',
+      parameter_set_id: Number(values.parameter_set_id),
+      initial_cash: Number(values.initial_cash || 100000),
+    })
+      .then(() => Promise.all([fetchBacktests(token), fetchOperationLogs(token)]))
+      .then(([backtestPayload, logPayload]) => {
+        setBacktests(backtestPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setBacktestError(error instanceof Error ? error.message : 'Backtest failed'))
+      .finally(() => setBacktestRunning(false))
+  }
+
   const loginPanel = (
     <main className="login-shell">
       <Card className="login-card">
@@ -374,7 +417,12 @@ function App() {
             <Space>
               <Badge status={apiStatus === 'Connected' ? 'success' : 'processing'} text={`API ${apiStatus}`} />
               <Tag color="blue">Admin: {currentUser.username}</Tag>
-              <Button type="primary" icon={<PlayCircleOutlined />}>
+              <Button
+                type="primary"
+                icon={<PlayCircleOutlined />}
+                onClick={() => backtestForm.submit()}
+                disabled={!instruments.length || !strategyParameterSets.length}
+              >
                 New Backtest
               </Button>
               <Button onClick={handleLogout}>Sign Out</Button>
@@ -410,8 +458,8 @@ function App() {
               <Card>
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">Published Snapshots</Text>
-                  <Title level={2}>0</Title>
-                  <Text>Immutable client reports</Text>
+                  <Title level={2}>{backtests.length}</Title>
+                  <Text>{backtests[0] ? `Latest ${backtests[0].status}` : 'Backtest before publishing'}</Text>
                 </Space>
               </Card>
               <Card>
@@ -424,8 +472,8 @@ function App() {
               <Card>
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">V1 Progress</Text>
-                  <Progress percent={30} size="small" />
-                  <Text>Admin, portfolios, and CSV data import connected</Text>
+                  <Progress percent={45} size="small" />
+                  <Text>Data, strategy configs, and backtests connected</Text>
                 </Space>
               </Card>
             </section>
@@ -648,6 +696,77 @@ function App() {
                     },
                   ]}
                   dataSource={strategyParameterSets.map((parameterSet) => ({ ...parameterSet, key: parameterSet.id }))}
+                />
+              </Card>
+
+              <Card title="Backtest Task Management">
+                {backtestError ? <Alert type="error" showIcon message={backtestError} className="form-alert" /> : null}
+                <Form
+                  form={backtestForm}
+                  layout="inline"
+                  initialValues={{
+                    instrument_id: instruments[0]?.id,
+                    frequency: '5m',
+                    parameter_set_id: strategyParameterSets[0]?.id,
+                    initial_cash: 100000,
+                  }}
+                  onFinish={handleCreateBacktest}
+                  className="instrument-form"
+                >
+                  <Form.Item name="instrument_id" rules={[{ required: true }]}>
+                    <Input placeholder="Instrument ID" />
+                  </Form.Item>
+                  <Form.Item name="frequency" rules={[{ required: true }]}>
+                    <Input placeholder="5m" />
+                  </Form.Item>
+                  <Form.Item name="parameter_set_id" rules={[{ required: true }]}>
+                    <Input placeholder="Parameter Set ID" />
+                  </Form.Item>
+                  <Form.Item name="initial_cash" rules={[{ required: true }]}>
+                    <InputNumber min={1} placeholder="Initial Cash" />
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit" loading={backtestRunning} disabled={!instruments.length || !strategyParameterSets.length}>
+                    Run Backtest
+                  </Button>
+                </Form>
+                <Table
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'ID', dataIndex: 'id', width: 70 },
+                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    {
+                      title: 'Status',
+                      dataIndex: 'status',
+                      width: 110,
+                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{status}</Tag>,
+                    },
+                    {
+                      title: 'Return',
+                      dataIndex: 'metrics',
+                      width: 110,
+                      render: (metrics: BacktestRun['metrics']) => `${(((metrics.cumulative_return ?? 0) as number) * 100).toFixed(2)}%`,
+                    },
+                    {
+                      title: 'Max DD',
+                      dataIndex: 'metrics',
+                      width: 110,
+                      render: (metrics: BacktestRun['metrics']) => `${(((metrics.max_drawdown ?? 0) as number) * 100).toFixed(2)}%`,
+                    },
+                    {
+                      title: 'Trades',
+                      dataIndex: 'metrics',
+                      width: 90,
+                      render: (metrics: BacktestRun['metrics']) => metrics.trade_count ?? 0,
+                    },
+                    {
+                      title: 'Equity Points',
+                      dataIndex: 'result_payload',
+                      width: 130,
+                      render: (payload: BacktestRun['result_payload']) => payload.equity_curve?.length ?? 0,
+                    },
+                  ]}
+                  dataSource={backtests.map((backtest) => ({ ...backtest, key: backtest.id }))}
                 />
               </Card>
 
