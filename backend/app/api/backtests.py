@@ -6,15 +6,16 @@ from sqlmodel import select
 
 from app.core.database import SessionDep
 from app.core.security import get_current_user
-from app.models import BacktestRun, Bar, Instrument, StrategyParameterSet, TaskStatus, User
-from app.services.backtest import run_single_instrument_backtest
+from app.models import BacktestRun, Bar, Instrument, Portfolio, PortfolioInstrument, StrategyParameterSet, TaskStatus, User
+from app.services.backtest import PortfolioLeg, run_portfolio_backtest, run_single_instrument_backtest
 from app.services.operation_log import record_operation
 
 router = APIRouter(prefix="/backtests", tags=["backtests"])
 
 
 class BacktestCreate(BaseModel):
-    instrument_id: int
+    instrument_id: int | None = None
+    portfolio_id: int | None = None
     frequency: str = "5m"
     parameter_set_id: int
     initial_cash: float = Field(default=100000, gt=0)
@@ -61,11 +62,11 @@ def create_backtest(
     session: SessionDep,
     current_user: User = Depends(get_current_user),
 ) -> BacktestRunResponse:
-    instrument = session.get(Instrument, payload.instrument_id)
-    if not instrument:
+    selected_scopes = [payload.instrument_id is not None, payload.portfolio_id is not None]
+    if selected_scopes.count(True) != 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown instrument id: {payload.instrument_id}",
+            detail="Choose exactly one backtest scope: instrument_id or portfolio_id",
         )
 
     parameter_set = session.get(StrategyParameterSet, payload.parameter_set_id)
@@ -76,26 +77,86 @@ def create_backtest(
         )
 
     frequency = payload.frequency.strip().lower()
-    statement = (
-        select(Bar)
-        .where(Bar.instrument_id == payload.instrument_id, Bar.frequency == frequency)
-        .order_by(Bar.timestamp)
-    )
-    bars = session.exec(statement).all()
+    scope_config: dict
+    target_type: str
+    target_id: str
 
     try:
-        result = run_single_instrument_backtest(
-            bars=bars,
-            parameter_set=parameter_set,
-            initial_cash=payload.initial_cash,
-        )
+        if payload.instrument_id is not None:
+            instrument = session.get(Instrument, payload.instrument_id)
+            if not instrument:
+                raise ValueError(f"Unknown instrument id: {payload.instrument_id}")
+
+            statement = (
+                select(Bar)
+                .where(Bar.instrument_id == payload.instrument_id, Bar.frequency == frequency)
+                .order_by(Bar.timestamp)
+            )
+            bars = session.exec(statement).all()
+            result = run_single_instrument_backtest(
+                bars=bars,
+                parameter_set=parameter_set,
+                initial_cash=payload.initial_cash,
+            )
+            scope_config = {
+                "scope": "instrument",
+                "instrument_id": payload.instrument_id,
+                "instrument_symbol": instrument.symbol,
+            }
+            target_type = "instrument"
+            target_id = str(payload.instrument_id)
+        else:
+            portfolio = session.get(Portfolio, payload.portfolio_id)
+            if not portfolio:
+                raise ValueError(f"Unknown portfolio id: {payload.portfolio_id}")
+
+            positions_statement = select(PortfolioInstrument).where(
+                PortfolioInstrument.portfolio_id == payload.portfolio_id
+            )
+            positions = session.exec(positions_statement).all()
+            legs: list[PortfolioLeg] = []
+            for position in positions:
+                instrument = session.get(Instrument, position.instrument_id)
+                if not instrument:
+                    raise ValueError(f"Unknown instrument id: {position.instrument_id}")
+
+                bars_statement = (
+                    select(Bar)
+                    .where(Bar.instrument_id == position.instrument_id, Bar.frequency == frequency)
+                    .order_by(Bar.timestamp)
+                )
+                legs.append(
+                    PortfolioLeg(
+                        instrument_id=position.instrument_id,
+                        symbol=instrument.symbol,
+                        weight=position.weight,
+                        bars=session.exec(bars_statement).all(),
+                    )
+                )
+
+            result = run_portfolio_backtest(
+                legs=legs,
+                parameter_set=parameter_set,
+                initial_cash=payload.initial_cash,
+            )
+            scope_config = {
+                "scope": "portfolio",
+                "portfolio_id": payload.portfolio_id,
+                "portfolio_name": portfolio.name,
+                "positions": [
+                    {"instrument_id": leg.instrument_id, "symbol": leg.symbol, "weight": leg.weight}
+                    for leg in legs
+                ],
+            }
+            target_type = "portfolio"
+            target_id = str(payload.portfolio_id)
     except ValueError as exc:
         record_operation(
             session,
             action="backtest.create.failed",
             actor=current_user.username,
-            target_type="instrument",
-            target_id=str(payload.instrument_id),
+            target_type=target_type if "target_type" in locals() else "backtest_scope",
+            target_id=target_id if "target_id" in locals() else "",
             detail={"message": str(exc), "frequency": frequency},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -105,7 +166,7 @@ def create_backtest(
         parameter_set_id=parameter_set.id,
         status=TaskStatus.succeeded,
         config={
-            "instrument_id": payload.instrument_id,
+            **scope_config,
             "frequency": frequency,
             "initial_cash": payload.initial_cash,
         },
@@ -123,6 +184,6 @@ def create_backtest(
         actor=current_user.username,
         target_type="backtest_run",
         target_id=str(backtest.id),
-        detail={"instrument_id": payload.instrument_id, "frequency": frequency},
+        detail={**scope_config, "frequency": frequency},
     )
     return backtest_response(backtest)

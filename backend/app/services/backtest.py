@@ -9,6 +9,14 @@ class BacktestResult:
     result_payload: dict
 
 
+@dataclass(frozen=True)
+class PortfolioLeg:
+    instrument_id: int
+    symbol: str
+    weight: float
+    bars: list[Bar]
+
+
 def run_single_instrument_backtest(
     *,
     bars: list[Bar],
@@ -99,3 +107,79 @@ def run_single_instrument_backtest(
         "risk_disclosure": "Backtest results are simulated and do not represent real-money trading.",
     }
     return BacktestResult(metrics=metrics, result_payload=result_payload)
+
+
+def run_portfolio_backtest(
+    *,
+    legs: list[PortfolioLeg],
+    parameter_set: StrategyParameterSet,
+    initial_cash: float,
+) -> BacktestResult:
+    if not legs:
+        raise ValueError("Portfolio has no positions")
+
+    for leg in legs:
+        if leg.weight <= 0:
+            raise ValueError(f"Portfolio position weight must be positive: {leg.symbol}")
+        if not leg.bars:
+            raise ValueError(f"No bars found for portfolio instrument: {leg.symbol}")
+
+    total_weight = sum(leg.weight for leg in legs)
+    if total_weight <= 0:
+        raise ValueError("Portfolio total weight must be positive")
+
+    bar_maps = [{bar.timestamp: bar for bar in leg.bars} for leg in legs]
+    common_timestamps = sorted(set.intersection(*(set(bar_map) for bar_map in bar_maps)))
+    if not common_timestamps:
+        raise ValueError("No overlapping bars found for selected portfolio and frequency")
+
+    first_timestamp = common_timestamps[0]
+    first_closes = []
+    for leg, bar_map in zip(legs, bar_maps, strict=True):
+        first_close = bar_map[first_timestamp].close
+        if first_close <= 0:
+            raise ValueError(f"First close price must be positive: {leg.symbol}")
+        first_closes.append(first_close)
+
+    synthetic_bars: list[Bar] = []
+    for timestamp in common_timestamps:
+        index_close = 0.0
+        index_volume = 0.0
+        for leg, bar_map, first_close in zip(legs, bar_maps, first_closes, strict=True):
+            bar = bar_map[timestamp]
+            normalized_weight = leg.weight / total_weight
+            index_close += normalized_weight * (bar.close / first_close) * 100
+            index_volume += bar.volume
+
+        synthetic_bars.append(
+            Bar(
+                instrument_id=0,
+                frequency=legs[0].bars[0].frequency,
+                timestamp=timestamp,
+                open=round(index_close, 6),
+                high=round(index_close, 6),
+                low=round(index_close, 6),
+                close=round(index_close, 6),
+                volume=index_volume,
+                source="portfolio",
+                data_version="synthetic",
+            )
+        )
+
+    result = run_single_instrument_backtest(
+        bars=synthetic_bars,
+        parameter_set=parameter_set,
+        initial_cash=initial_cash,
+    )
+    result.result_payload["scope"] = "portfolio"
+    result.result_payload["portfolio_legs"] = [
+        {
+            "instrument_id": leg.instrument_id,
+            "symbol": leg.symbol,
+            "weight": leg.weight,
+            "normalized_weight": round(leg.weight / total_weight, 6),
+            "bar_count": len(leg.bars),
+        }
+        for leg in legs
+    ]
+    return result

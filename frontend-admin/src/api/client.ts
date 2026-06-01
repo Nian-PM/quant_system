@@ -185,7 +185,8 @@ export type BacktestRun = {
 }
 
 export type BacktestInput = {
-  instrument_id: number
+  instrument_id?: number
+  portfolio_id?: number
   frequency: string
   parameter_set_id: number
   initial_cash: number

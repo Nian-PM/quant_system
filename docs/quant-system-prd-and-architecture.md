@@ -178,7 +178,7 @@ Expected behavior:
 - Records trades, positions, equity, drawdown, and metrics.
 - Outputs a reproducible result object for publishing.
 
-The first executable backtest slice is intentionally narrow: single instrument, stored bars, saved strategy parameter set, deterministic result generation. It stores `BacktestRun.metrics` and `BacktestRun.result_payload` with the same major groups expected by the future client snapshot: metrics, equity curve, benchmark curve, drawdown curve, candles, trade markers, position curve, trade table, and risk disclosure. Portfolio weighting, richer fill simulation, fee/slippage, and benchmark selection can be layered onto this contract.
+The executable backtest slice supports single instruments and fixed portfolios. Portfolio runs align each holding by overlapping bar timestamps, normalize each holding from its first close, aggregate a weighted synthetic portfolio index, and then run the same deterministic strategy path used by single-stock backtests. It stores `BacktestRun.metrics` and `BacktestRun.result_payload` with the same major groups expected by the client snapshot: metrics, equity curve, benchmark curve, drawdown curve, candles, trade markers, position curve, trade table, risk disclosure, plus portfolio leg metadata for portfolio runs. Richer fill simulation, fee/slippage, and benchmark selection can be layered onto this contract.
 
 ### 5.6 Paper Simulation
 

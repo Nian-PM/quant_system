@@ -66,7 +66,7 @@ Default local URLs:
 - Backend health check includes a database schema self-check for missing tables/columns.
 - Recent bar query and data import task list.
 - Saved strategy parameter sets generated from backend strategy metadata.
-- Single-instrument rolling T/grid backtests using stored bars.
+- Single-instrument and fixed-portfolio rolling T/grid backtests using stored bars.
 - Admin backtest review panel for metrics, curves, positions, and trade details before publishing.
 - Manual paper simulation runs using the same backend strategy path.
 - Immutable snapshot publishing with revocation and tokenized client report links.

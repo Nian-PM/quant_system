@@ -552,10 +552,15 @@ function App() {
       return
     }
 
+    const portfolioId = Number(values.portfolio_id || 0)
+    const backtestScope = portfolioId
+      ? { portfolio_id: portfolioId }
+      : { instrument_id: Number(values.instrument_id) }
+
     setBacktestRunning(true)
     setBacktestError('')
     createBacktest(token, {
-      instrument_id: Number(values.instrument_id),
+      ...backtestScope,
       frequency: values.frequency || '5m',
       parameter_set_id: Number(values.parameter_set_id),
       initial_cash: Number(values.initial_cash || 100000),
@@ -1177,8 +1182,11 @@ function App() {
                   onFinish={handleCreateBacktest}
                   className="instrument-form"
                 >
-                  <Form.Item name="instrument_id" rules={[{ required: true }]}>
+                  <Form.Item name="instrument_id">
                     <Input placeholder="Instrument ID" />
+                  </Form.Item>
+                  <Form.Item name="portfolio_id">
+                    <Input placeholder="Portfolio ID" />
                   </Form.Item>
                   <Form.Item name="frequency" rules={[{ required: true }]}>
                     <Input placeholder="5m" />
@@ -1189,7 +1197,12 @@ function App() {
                   <Form.Item name="initial_cash" rules={[{ required: true }]}>
                     <InputNumber min={1} placeholder="Initial Cash" />
                   </Form.Item>
-                  <Button type="primary" htmlType="submit" loading={backtestRunning} disabled={!instruments.length || !strategyParameterSets.length}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={backtestRunning}
+                    disabled={(!instruments.length && !portfolios.length) || !strategyParameterSets.length}
+                  >
                     Run Backtest
                   </Button>
                 </Form>
@@ -1199,6 +1212,15 @@ function App() {
                   columns={[
                     { title: 'ID', dataIndex: 'id', width: 70 },
                     { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    {
+                      title: 'Scope',
+                      dataIndex: 'config',
+                      width: 150,
+                      render: (config: BacktestRun['config']) =>
+                        config.scope === 'portfolio'
+                          ? `Portfolio #${config.portfolio_id ?? '-'}`
+                          : `Instrument #${config.instrument_id ?? '-'}`,
+                    },
                     {
                       title: 'Status',
                       dataIndex: 'status',
