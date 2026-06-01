@@ -20,10 +20,13 @@ import {
   ConfigProvider,
   Form,
   Input,
+  InputNumber,
   Layout,
   Menu,
   Progress,
+  Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -37,8 +40,10 @@ import {
   fetchMarketBars,
   fetchPortfolios,
   fetchStrategies,
+  fetchStrategyParameterSets,
   createInstrument,
   createPortfolio,
+  createStrategyParameterSet,
   importCsvMarketData,
   type Bar,
   type CsvImportInput,
@@ -48,6 +53,8 @@ import {
   type InstrumentInput,
   type OperationLog,
   type Portfolio,
+  type StrategyParameter,
+  type StrategyParameterSet,
   type StrategyTemplate,
   type UserProfile,
 } from './api/client'
@@ -79,6 +86,7 @@ function App() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [bars, setBars] = useState<Bar[]>([])
   const [dataImportTasks, setDataImportTasks] = useState<DataImportTask[]>([])
+  const [strategyParameterSets, setStrategyParameterSets] = useState<StrategyParameterSet[]>([])
   const [operationLogs, setOperationLogs] = useState<OperationLog[]>([])
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [token, setToken] = useState(() => localStorage.getItem('quant_admin_token') ?? '')
@@ -88,10 +96,13 @@ function App() {
   const [instrumentForm] = Form.useForm<InstrumentInput>()
   const [portfolioForm] = Form.useForm<{ name: string; description: string; instrument_id: number; weight: number }>()
   const [marketDataForm] = Form.useForm<CsvImportInput>()
+  const [strategyParameterForm] = Form.useForm<Record<string, number | boolean | string>>()
   const [instrumentSaving, setInstrumentSaving] = useState(false)
   const [portfolioSaving, setPortfolioSaving] = useState(false)
   const [marketDataImporting, setMarketDataImporting] = useState(false)
+  const [strategyParameterSaving, setStrategyParameterSaving] = useState(false)
   const [marketDataError, setMarketDataError] = useState('')
+  const [strategyParameterError, setStrategyParameterError] = useState('')
 
   const refreshAdminData = (accessToken: string) => {
     Promise.all([
@@ -101,14 +112,24 @@ function App() {
       fetchInstruments(accessToken),
       fetchPortfolios(accessToken),
       fetchDataImportTasks(accessToken),
+      fetchStrategyParameterSets(accessToken),
     ])
-      .then(([strategyPayload, profilePayload, logPayload, instrumentPayload, portfolioPayload, importTaskPayload]) => {
+      .then(([
+        strategyPayload,
+        profilePayload,
+        logPayload,
+        instrumentPayload,
+        portfolioPayload,
+        importTaskPayload,
+        strategyParameterSetPayload,
+      ]) => {
         setStrategies(strategyPayload)
         setCurrentUser(profilePayload)
         setOperationLogs(logPayload)
         setInstruments(instrumentPayload)
         setPortfolios(portfolioPayload)
         setDataImportTasks(importTaskPayload)
+        setStrategyParameterSets(strategyParameterSetPayload)
         setApiStatus('Connected')
 
         const firstInstrument = instrumentPayload[0]
@@ -126,6 +147,7 @@ function App() {
         setPortfolios([])
         setBars([])
         setDataImportTasks([])
+        setStrategyParameterSets([])
       })
   }
 
@@ -150,6 +172,22 @@ function App() {
       marketDataForm.setFieldValue('instrument_id', instruments[0].id)
     }
   }, [instruments, marketDataForm, portfolioForm])
+
+  useEffect(() => {
+    const firstStrategy = strategies[0]
+    if (!currentUser || !firstStrategy) {
+      return
+    }
+
+    const defaultValues = Object.fromEntries(
+      firstStrategy.parameters.map((parameter) => [parameter.name, parameter.default]),
+    )
+    strategyParameterForm.setFieldsValue({
+      name: `${firstStrategy.display_name} default`,
+      strategy_id: firstStrategy.strategy_id,
+      ...defaultValues,
+    })
+  }, [currentUser, strategies, strategyParameterForm])
 
   const handleLogin = (values: { username: string; password: string }) => {
     setLoginLoading(true)
@@ -232,6 +270,42 @@ function App() {
       })
       .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'CSV import failed'))
       .finally(() => setMarketDataImporting(false))
+  }
+
+  const renderStrategyParameterInput = (parameter: StrategyParameter) => {
+    if (parameter.type === 'boolean') {
+      return <Switch />
+    }
+    if (parameter.type === 'select') {
+      return <Select options={parameter.options.map((option) => ({ label: option, value: option }))} />
+    }
+    return <InputNumber min={parameter.min_value ?? undefined} max={parameter.max_value ?? undefined} />
+  }
+
+  const handleCreateStrategyParameterSet = (values: Record<string, number | boolean | string>) => {
+    if (!token || !strategies[0]) {
+      return
+    }
+
+    const strategy = strategies[0]
+    const parameters = Object.fromEntries(
+      strategy.parameters.map((parameter) => [parameter.name, values[parameter.name] ?? parameter.default]),
+    )
+
+    setStrategyParameterSaving(true)
+    setStrategyParameterError('')
+    createStrategyParameterSet(token, {
+      strategy_id: strategy.strategy_id,
+      name: String(values.name || `${strategy.display_name} config`),
+      parameters,
+    })
+      .then(() => Promise.all([fetchStrategyParameterSets(token), fetchOperationLogs(token)]))
+      .then(([parameterSetPayload, logPayload]) => {
+        setStrategyParameterSets(parameterSetPayload)
+        setOperationLogs(logPayload)
+      })
+      .catch((error) => setStrategyParameterError(error instanceof Error ? error.message : 'Strategy config save failed'))
+      .finally(() => setStrategyParameterSaving(false))
   }
 
   const loginPanel = (
@@ -326,7 +400,11 @@ function App() {
                 <Space orientation="vertical" size={4}>
                   <Text type="secondary">Strategy Templates</Text>
                   <Title level={2}>{strategies.length}</Title>
-                  <Text>{strategies[0]?.display_name ?? 'Loading strategy registry'}</Text>
+                  <Text>
+                    {strategyParameterSets.length
+                      ? `${strategyParameterSets.length} saved parameter sets`
+                      : strategies[0]?.display_name ?? 'Loading strategy registry'}
+                  </Text>
                 </Space>
               </Card>
               <Card>
@@ -498,6 +576,78 @@ function App() {
                     { title: 'Message', dataIndex: 'message' },
                   ]}
                   dataSource={dataImportTasks.map((task) => ({ ...task, key: task.id }))}
+                />
+              </Card>
+
+              <Card title="Strategy Template Management">
+                {strategyParameterError ? <Alert type="error" showIcon message={strategyParameterError} className="form-alert" /> : null}
+                {strategies[0] ? (
+                  <>
+                    <Space orientation="vertical" size={4} className="strategy-summary">
+                      <Text strong>{strategies[0].display_name}</Text>
+                      <Text type="secondary">{strategies[0].description}</Text>
+                      <Space wrap>
+                        {strategies[0].supported_frequencies.map((frequency) => (
+                          <Tag color={frequency === '5m' ? 'blue' : 'default'} key={frequency}>
+                            {frequency}
+                          </Tag>
+                        ))}
+                      </Space>
+                    </Space>
+                    <Form
+                      form={strategyParameterForm}
+                      layout="vertical"
+                      onFinish={handleCreateStrategyParameterSet}
+                      className="strategy-parameter-form"
+                    >
+                      <Form.Item name="name" label="Parameter Set Name" rules={[{ required: true }]}>
+                        <Input placeholder="Parameter set name" />
+                      </Form.Item>
+                      <div className="strategy-parameter-grid">
+                        {strategies[0].parameters.map((parameter) => (
+                          <Form.Item
+                            key={parameter.name}
+                            name={parameter.name}
+                            label={parameter.label}
+                            valuePropName={parameter.type === 'boolean' ? 'checked' : 'value'}
+                            extra={parameter.description}
+                          >
+                            {renderStrategyParameterInput(parameter)}
+                          </Form.Item>
+                        ))}
+                      </div>
+                      <Button type="primary" htmlType="submit" loading={strategyParameterSaving}>
+                        Save Strategy Config
+                      </Button>
+                    </Form>
+                  </>
+                ) : (
+                  <Text type="secondary">Loading strategy metadata</Text>
+                )}
+                <Table
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'Name', dataIndex: 'name' },
+                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    {
+                      title: 'Grid %',
+                      dataIndex: 'parameters',
+                      width: 100,
+                      render: (parameters: StrategyParameterSet['parameters']) => parameters.grid_percent,
+                    },
+                    {
+                      title: 'MA Filter',
+                      dataIndex: 'parameters',
+                      width: 110,
+                      render: (parameters: StrategyParameterSet['parameters']) => (
+                        <Tag color={parameters.enable_ma_filter ? 'green' : 'default'}>
+                          {parameters.enable_ma_filter ? 'on' : 'off'}
+                        </Tag>
+                      ),
+                    },
+                  ]}
+                  dataSource={strategyParameterSets.map((parameterSet) => ({ ...parameterSet, key: parameterSet.id }))}
                 />
               </Card>
 

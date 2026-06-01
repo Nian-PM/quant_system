@@ -3,8 +3,23 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000
 export type StrategyTemplate = {
   strategy_id: string
   display_name: string
+  description: string
   version: string
+  supported_scopes: string[]
   supported_frequencies: string[]
+  parameters: StrategyParameter[]
+  output_contract: string[]
+}
+
+export type StrategyParameter = {
+  name: string
+  label: string
+  type: 'number' | 'integer' | 'boolean' | 'select'
+  default: number | boolean | string
+  description: string
+  min_value: number | null
+  max_value: number | null
+  options: string[]
 }
 
 export type LoginResponse = {
@@ -93,6 +108,20 @@ export type CsvImportInput = {
   frequency: string
   source: string
   csv_text: string
+}
+
+export type StrategyParameterSet = {
+  id: number
+  strategy_id: string
+  name: string
+  parameters: Record<string, number | boolean | string>
+  created_at: string
+}
+
+export type StrategyParameterSetInput = {
+  strategy_id: string
+  name: string
+  parameters: Record<string, number | boolean | string>
 }
 
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -206,5 +235,26 @@ export async function fetchDataImportTasks(token: string): Promise<DataImportTas
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  })
+}
+
+export async function fetchStrategyParameterSets(token: string): Promise<StrategyParameterSet[]> {
+  return requestJson<StrategyParameterSet[]>('/strategy-parameter-sets', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function createStrategyParameterSet(
+  token: string,
+  input: StrategyParameterSetInput,
+): Promise<StrategyParameterSet> {
+  return requestJson<StrategyParameterSet>('/strategy-parameter-sets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
   })
 }

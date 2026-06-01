@@ -1,6 +1,15 @@
 from fastapi import APIRouter
 
-from app.api import auth, health, instruments, market_data, operation_logs, portfolios, strategies
+from app.api import (
+    auth,
+    health,
+    instruments,
+    market_data,
+    operation_logs,
+    portfolios,
+    strategies,
+    strategy_parameter_sets,
+)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router)
@@ -10,3 +19,4 @@ api_router.include_router(market_data.router)
 api_router.include_router(operation_logs.router)
 api_router.include_router(portfolios.router)
 api_router.include_router(strategies.router)
+api_router.include_router(strategy_parameter_sets.router)

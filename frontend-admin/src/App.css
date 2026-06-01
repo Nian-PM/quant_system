@@ -91,6 +91,17 @@
   gap: 12px;
 }
 
+.strategy-summary,
+.strategy-parameter-form {
+  margin-bottom: 16px;
+}
+
+.strategy-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+}
+
 .pipeline {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

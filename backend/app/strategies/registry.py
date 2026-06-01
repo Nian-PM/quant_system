@@ -96,3 +96,52 @@ ROLLING_T_GRID = StrategyTemplate(
 
 def get_strategy_registry() -> list[StrategyTemplate]:
     return [ROLLING_T_GRID]
+
+
+def get_strategy_template(strategy_id: str) -> StrategyTemplate | None:
+    return next((strategy for strategy in get_strategy_registry() if strategy.strategy_id == strategy_id), None)
+
+
+def normalize_strategy_parameters(strategy_id: str, parameters: dict) -> dict:
+    template = get_strategy_template(strategy_id)
+    if template is None:
+        raise ValueError(f"Unknown strategy: {strategy_id}")
+
+    known_names = {parameter.name for parameter in template.parameters}
+    unknown_names = set(parameters) - known_names
+    if unknown_names:
+        unknown = ", ".join(sorted(unknown_names))
+        raise ValueError(f"Unknown parameters for {strategy_id}: {unknown}")
+
+    normalized = {}
+    for parameter in template.parameters:
+        raw_value = parameters.get(parameter.name, parameter.default)
+        if parameter.type == "boolean":
+            if not isinstance(raw_value, bool):
+                raise ValueError(f"{parameter.name} must be a boolean")
+            value = raw_value
+        elif parameter.type == "integer":
+            if isinstance(raw_value, bool):
+                raise ValueError(f"{parameter.name} must be an integer")
+            value = int(raw_value)
+            if value != raw_value and not (isinstance(raw_value, float) and raw_value.is_integer()):
+                raise ValueError(f"{parameter.name} must be an integer")
+        elif parameter.type == "number":
+            if isinstance(raw_value, bool):
+                raise ValueError(f"{parameter.name} must be a number")
+            value = float(raw_value)
+        elif parameter.type == "select":
+            value = str(raw_value)
+            if value not in parameter.options:
+                raise ValueError(f"{parameter.name} must be one of: {', '.join(parameter.options)}")
+        else:
+            value = raw_value
+
+        if parameter.min_value is not None and isinstance(value, int | float) and value < parameter.min_value:
+            raise ValueError(f"{parameter.name} must be >= {parameter.min_value}")
+        if parameter.max_value is not None and isinstance(value, int | float) and value > parameter.max_value:
+            raise ValueError(f"{parameter.name} must be <= {parameter.max_value}")
+
+        normalized[parameter.name] = value
+
+    return normalized

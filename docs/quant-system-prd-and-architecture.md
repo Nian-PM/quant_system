@@ -157,6 +157,14 @@ Strategies should be metadata-driven. A strategy module declares:
 
 The admin frontend reads this metadata through the backend and automatically renders the configuration form. Adding a new strategy should not require changing frontend form code.
 
+Strategy parameter sets are saved backend objects. The admin frontend may render and submit forms from strategy metadata, but it must not own strategy defaults or validation logic. When a parameter set is saved:
+
+- The backend validates the requested `strategy_id` against the registry.
+- Missing parameter values are filled from registry defaults.
+- Numeric bounds, integer values, booleans, and select options are validated by the backend.
+- The persisted parameter object is the fully normalized parameter set used later by backtests and paper simulations.
+- Save actions are recorded in operation logs.
+
 ### 5.5 Quant and Backtest Layer
 
 V1 includes a rolling T/grid strategy with optional moving-average filter.
