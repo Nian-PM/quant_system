@@ -31,6 +31,7 @@ import {
   Tag,
   Typography,
 } from 'antd'
+import zhCN from 'antd/locale/zh_CN'
 import { useEffect, useState } from 'react'
 import {
   fetchOperationLogs,
@@ -92,20 +93,20 @@ const { Text, Title } = Typography
 const DISPLAY_BASE_URL = import.meta.env.VITE_DISPLAY_BASE_URL ?? 'http://127.0.0.1:5184'
 
 const modules = [
-  { key: 'portfolios', icon: <StockOutlined />, label: 'Portfolios' },
-  { key: 'data', icon: <DatabaseOutlined />, label: 'Market Data' },
-  { key: 'strategies', icon: <DeploymentUnitOutlined />, label: 'Strategies' },
-  { key: 'backtests', icon: <BarChartOutlined />, label: 'Backtests' },
-  { key: 'paper', icon: <PlayCircleOutlined />, label: 'Paper Runs' },
-  { key: 'snapshots', icon: <FundProjectionScreenOutlined />, label: 'Snapshots' },
-  { key: 'links', icon: <LinkOutlined />, label: 'Share Links' },
-  { key: 'logs', icon: <AuditOutlined />, label: 'Logs' },
+  { key: 'portfolios', icon: <StockOutlined />, label: '组合管理' },
+  { key: 'data', icon: <DatabaseOutlined />, label: '行情数据' },
+  { key: 'strategies', icon: <DeploymentUnitOutlined />, label: '策略配置' },
+  { key: 'backtests', icon: <BarChartOutlined />, label: '回测任务' },
+  { key: 'paper', icon: <PlayCircleOutlined />, label: '模拟运行' },
+  { key: 'snapshots', icon: <FundProjectionScreenOutlined />, label: '展示快照' },
+  { key: 'links', icon: <LinkOutlined />, label: '分享链接' },
+  { key: 'logs', icon: <AuditOutlined />, label: '操作日志' },
 ]
 
 const tasks = [
-  { key: 1, name: 'CSI 300 grid backtest', type: 'Backtest', status: 'Pending', updatedAt: '2026-06-01 10:30' },
-  { key: 2, name: '600519.SH 5m data sync', type: 'Data', status: 'Succeeded', updatedAt: '2026-06-01 09:42' },
-  { key: 3, name: 'rolling_t_grid paper run', type: 'Paper', status: 'Running', updatedAt: '2026-06-01 09:30' },
+  { key: 1, name: '沪深300网格回测', type: '回测', status: 'pending', updatedAt: '2026-06-01 10:30' },
+  { key: 2, name: '600519.SH 5分钟行情同步', type: '数据', status: 'succeeded', updatedAt: '2026-06-01 09:42' },
+  { key: 3, name: '滚动做T策略模拟运行', type: '模拟', status: 'running', updatedAt: '2026-06-01 09:30' },
 ]
 
 function clientReportUrl(shareToken: string): string {
@@ -126,6 +127,172 @@ function formatDateTime(value: string | null | undefined): string {
 
 function formatRatio(value: number | null | undefined): string {
   return value === null || value === undefined ? '-' : `${(value * 100).toFixed(2)}%`
+}
+
+const statusText: Record<string, string> = {
+  Checking: '检查中',
+  Connected: '已连接',
+  Offline: '离线',
+  pending: '待处理',
+  running: '运行中',
+  succeeded: '成功',
+  failed: '失败',
+  published: '已发布',
+  revoked: '已撤销',
+  draft: '草稿',
+  active: '启用',
+  disabled: '停用',
+  empty: '无数据',
+  warning: '有缺口',
+  ok: '正常',
+  unchecked: '未检查',
+  unknown_frequency: '未知周期',
+  buy: '买入',
+  sell: '卖出',
+  hold: '持有',
+}
+
+const operationActionText: Record<string, string> = {
+  'auth.admin.seeded': '初始化管理员',
+  'auth.login.failed': '登录失败',
+  'auth.login.success': '登录成功',
+  'instrument.create': '新增标的',
+  'portfolio.create': '新增组合',
+  'market_data.import_csv.failed': 'CSV导入失败',
+  'market_data.import_csv.succeeded': 'CSV导入成功',
+  'market_data.fetch_public.failed': '公开行情拉取失败',
+  'market_data.fetch_public.succeeded': '公开行情拉取成功',
+  'market_data.schedule.create': '创建行情计划',
+  'market_data.schedule.disable': '停用行情计划',
+  'market_data.schedule.run.failed': '行情计划执行失败',
+  'market_data.schedule.run.succeeded': '行情计划执行成功',
+  'strategy_parameter_set.create': '保存策略参数',
+  'backtest.create.failed': '回测创建失败',
+  'backtest.create.succeeded': '回测创建成功',
+  'paper_run.create.failed': '模拟运行失败',
+  'paper_run.create.succeeded': '模拟运行成功',
+  'snapshot.publish': '发布展示快照',
+  'snapshot.revoke': '撤销展示快照',
+  'share_link.create': '创建分享链接',
+  'share_link.revoke': '撤销分享链接',
+}
+
+const targetTypeText: Record<string, string> = {
+  auth: '认证',
+  user: '用户',
+  instrument: '标的',
+  portfolio: '组合',
+  market_data: '行情数据',
+  market_data_schedule: '行情计划',
+  strategy_parameter_set: '策略参数',
+  backtest: '回测',
+  paper_run: '模拟运行',
+  snapshot: '展示快照',
+  share_link: '分享链接',
+}
+
+const strategyNameText: Record<string, string> = {
+  'Rolling T / Grid Strategy': '滚动做T / 网格策略',
+}
+
+const strategyDescriptionText: Record<string, string> = {
+  'Rule-based rolling T strategy for a fixed stock or portfolio. It uses grid thresholds and an optional moving-average filter.':
+    '面向固定股票或组合的规则型滚动做T策略，使用网格阈值和可选均线过滤器生成信号。',
+}
+
+const parameterLabelText: Record<string, string> = {
+  'Grid Percent': '网格触发幅度',
+  'Base Position Percent': '底仓比例',
+  'Trade Position Percent': '单次交易仓位',
+  'Enable MA Filter': '启用均线过滤',
+  'MA Window': '均线窗口',
+}
+
+const parameterDescriptionText: Record<string, string> = {
+  'Price movement percentage that triggers a grid buy/sell signal.': '触发网格买入/卖出信号的价格波动百分比。',
+  'Baseline position percentage kept for rolling T operations.': '滚动做T过程中保留的基础仓位比例。',
+  'Position percentage used by each grid trade.': '每次网格交易使用的仓位比例。',
+  'Enable moving-average trend filter before generating signals.': '生成信号前是否启用均线趋势过滤。',
+  'Moving-average window used when the filter is enabled.': '启用均线过滤时使用的均线周期。',
+}
+
+const dataMessageText: Record<string, string> = {
+  'No bars found for selected instrument and frequency.': '当前标的和周期没有找到K线数据。',
+  'Data continuity looks usable for the selected frequency.': '当前周期的数据连续性可用于回测。',
+  'Frequency is not mapped to an expected interval; continuity gaps were not evaluated.': '当前周期未映射到预期时间间隔，未评估数据缺口。',
+  'CSV import succeeded': 'CSV导入成功',
+  'akshare is not installed; use CSV import or install akshare for public data fetch':
+    '未安装 akshare；请使用CSV导入，或安装 akshare 后拉取公开行情。',
+}
+
+const displayText: Record<string, string> = {
+  'Core A-share Basket': '核心A股组合',
+  'Fixed demo portfolio for V1 backtests.': '用于V1回测的固定演示组合。',
+  'Kweichow Moutai': '贵州茅台',
+  'Rolling T / Grid Strategy default': '滚动做T / 网格策略默认参数',
+  'Strategy Report #1': '策略展示报告 #1',
+  'Client Display Verification Report': '客户展示验证报告',
+  'Backtest results are simulated and do not represent real-money trading.': '回测结果为模拟结果，不代表真实资金交易表现。',
+  stock: '股票',
+  user: '用户',
+}
+
+function tStatus(status: string | null | undefined): string {
+  return status ? statusText[status] ?? status : '-'
+}
+
+function tAction(action: string): string {
+  return operationActionText[action] ?? action
+}
+
+function tTargetType(targetType: string): string {
+  return targetTypeText[targetType] ?? targetType
+}
+
+function tStrategyName(name: string): string {
+  return strategyNameText[name] ?? name
+}
+
+function tStrategyDescription(description: string): string {
+  return strategyDescriptionText[description] ?? description
+}
+
+function tParameterLabel(label: string): string {
+  return parameterLabelText[label] ?? label
+}
+
+function tParameterDescription(description: string): string {
+  return parameterDescriptionText[description] ?? description
+}
+
+function tDataMessage(message: string | null | undefined): string {
+  if (!message) {
+    return '回测前请先检查所选标的的数据完整性。'
+  }
+  const gapMatch = message.match(/^Detected (\d+) interval gap\(s\) before running backtests\.$/)
+  if (gapMatch) {
+    return `检测到 ${gapMatch[1]} 个周期缺口，建议回测前先补齐数据。`
+  }
+  return dataMessageText[message] ?? message
+}
+
+function tDisplayText(value: string | null | undefined): string {
+  if (!value) {
+    return '-'
+  }
+  const testStockMatch = value.match(/^(.+) test stock$/)
+  if (testStockMatch) {
+    return `${testStockMatch[1]} 测试股票`
+  }
+  const strategyReportMatch = value.match(/^Strategy Report #(\d+)$/)
+  if (strategyReportMatch) {
+    return `策略展示报告 #${strategyReportMatch[1]}`
+  }
+  const legacyGarbledReportMatch = value.match(/^\?+ #(\d+)$/)
+  if (legacyGarbledReportMatch) {
+    return `策略展示报告 #${legacyGarbledReportMatch[1]}`
+  }
+  return displayText[value] ?? value
 }
 
 function chartPoints(series: Array<{ value: number }> = [], width = 360, height = 120): string {
@@ -325,7 +492,7 @@ function App() {
     if (backtests[0] && !snapshotForm.getFieldValue('backtest_run_id')) {
       snapshotForm.setFieldsValue({
         backtest_run_id: backtests[0].id,
-        title: `Strategy Report #${backtests[0].id}`,
+        title: `策略展示报告 #${backtests[0].id}`,
       })
     }
   }, [backtests, snapshotForm])
@@ -340,7 +507,7 @@ function App() {
       firstStrategy.parameters.map((parameter) => [parameter.name, parameter.default]),
     )
     strategyParameterForm.setFieldsValue({
-      name: `${firstStrategy.display_name} default`,
+      name: `${tStrategyName(firstStrategy.display_name)} 默认参数`,
       strategy_id: firstStrategy.strategy_id,
       ...defaultValues,
     })
@@ -354,7 +521,7 @@ function App() {
         localStorage.setItem('quant_admin_token', payload.access_token)
         setToken(payload.access_token)
       })
-      .catch(() => setLoginError('Invalid username or password. Use admin / admin for the local seed account.'))
+      .catch(() => setLoginError('用户名或密码错误。本地种子账号可使用 admin / admin。'))
       .finally(() => setLoginLoading(false))
   }
 
@@ -437,7 +604,7 @@ function App() {
         setDataImportTasks(importTaskPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'CSV import failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'CSV导入失败'))
       .finally(() => setMarketDataImporting(false))
   }
 
@@ -469,7 +636,7 @@ function App() {
         setDataImportTasks(importTaskPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Public data fetch failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : '公开行情拉取失败'))
       .finally(() => setPublicDataFetching(false))
   }
 
@@ -492,7 +659,7 @@ function App() {
         setMarketDataSchedules(schedulePayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Schedule save failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : '行情计划保存失败'))
       .finally(() => setScheduleSaving(false))
   }
 
@@ -511,7 +678,7 @@ function App() {
     setMarketDataError('')
     fetchMarketDataCompleteness(token, instrumentId, frequency)
       .then(setDataCompleteness)
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Data completeness check failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : '数据完整性检查失败'))
       .finally(() => setDataCompletenessChecking(false))
   }
 
@@ -529,7 +696,7 @@ function App() {
         setDataImportTasks(taskPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Schedule run failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : '行情计划执行失败'))
       .finally(() => setScheduleActionId(null))
   }
 
@@ -546,7 +713,7 @@ function App() {
         setMarketDataSchedules(schedulePayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setMarketDataError(error instanceof Error ? error.message : 'Schedule disable failed'))
+      .catch((error) => setMarketDataError(error instanceof Error ? error.message : '行情计划停用失败'))
       .finally(() => setScheduleActionId(null))
   }
 
@@ -574,7 +741,7 @@ function App() {
     setStrategyParameterError('')
     createStrategyParameterSet(token, {
       strategy_id: strategy.strategy_id,
-      name: String(values.name || `${strategy.display_name} config`),
+      name: String(values.name || `${tStrategyName(strategy.display_name)} 配置`),
       parameters,
     })
       .then(() => Promise.all([fetchStrategyParameterSets(token), fetchOperationLogs(token)]))
@@ -582,7 +749,7 @@ function App() {
         setStrategyParameterSets(parameterSetPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setStrategyParameterError(error instanceof Error ? error.message : 'Strategy config save failed'))
+      .catch((error) => setStrategyParameterError(error instanceof Error ? error.message : '策略配置保存失败'))
       .finally(() => setStrategyParameterSaving(false))
   }
 
@@ -610,7 +777,7 @@ function App() {
         setSelectedBacktestId(backtestPayload[0]?.id ?? null)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setBacktestError(error instanceof Error ? error.message : 'Backtest failed'))
+      .catch((error) => setBacktestError(error instanceof Error ? error.message : '回测执行失败'))
       .finally(() => setBacktestRunning(false))
   }
 
@@ -632,7 +799,7 @@ function App() {
         setPaperRuns(paperRunPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setPaperRunError(error instanceof Error ? error.message : 'Paper simulation failed'))
+      .catch((error) => setPaperRunError(error instanceof Error ? error.message : '模拟运行失败'))
       .finally(() => setPaperRunStarting(false))
   }
 
@@ -646,7 +813,7 @@ function App() {
     setLatestShareToken('')
     publishSnapshot(token, {
       backtest_run_id: Number(values.backtest_run_id),
-      title: values.title || `Strategy Report #${values.backtest_run_id}`,
+      title: values.title || `策略展示报告 #${values.backtest_run_id}`,
     })
       .then((payload) => {
         setLatestShareToken(payload.share_token)
@@ -656,7 +823,7 @@ function App() {
         setSnapshots(snapshotPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setSnapshotError(error instanceof Error ? error.message : 'Snapshot publish failed'))
+      .catch((error) => setSnapshotError(error instanceof Error ? error.message : '快照发布失败'))
       .finally(() => setSnapshotPublishing(false))
   }
 
@@ -677,7 +844,7 @@ function App() {
         setShareLinks(shareLinkPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setShareLinkError(error instanceof Error ? error.message : 'Share link create failed'))
+      .catch((error) => setShareLinkError(error instanceof Error ? error.message : '分享链接创建失败'))
       .finally(() => setShareLinkCreatingId(null))
   }
 
@@ -694,7 +861,7 @@ function App() {
         setShareLinks(shareLinkPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setShareLinkError(error instanceof Error ? error.message : 'Share link revoke failed'))
+      .catch((error) => setShareLinkError(error instanceof Error ? error.message : '分享链接撤销失败'))
       .finally(() => setShareLinkRevokingId(null))
   }
 
@@ -712,7 +879,7 @@ function App() {
         setShareLinks(shareLinkPayload)
         setOperationLogs(logPayload)
       })
-      .catch((error) => setSnapshotError(error instanceof Error ? error.message : 'Snapshot revoke failed'))
+      .catch((error) => setSnapshotError(error instanceof Error ? error.message : '快照撤销失败'))
       .finally(() => setSnapshotRevokingId(null))
   }
 
@@ -729,8 +896,8 @@ function App() {
           <div className="login-brand">
             <ApiOutlined />
             <div>
-              <Title level={3}>Quant System Admin</Title>
-              <Text type="secondary">Sign in to manage strategies, backtests, snapshots, and audit logs.</Text>
+              <Title level={3}>量化系统管理端</Title>
+              <Text type="secondary">登录后管理策略、回测、展示快照和审计日志。</Text>
             </div>
           </div>
           {loginError ? <Alert type="error" showIcon title={loginError} /> : null}
@@ -739,14 +906,14 @@ function App() {
             initialValues={{ username: 'admin', password: 'admin' }}
             onFinish={handleLogin}
           >
-            <Form.Item label="Username" name="username" rules={[{ required: true }]}>
+            <Form.Item label="用户名" name="username" rules={[{ required: true }]}>
               <Input autoComplete="username" />
             </Form.Item>
-            <Form.Item label="Password" name="password" rules={[{ required: true }]}>
+            <Form.Item label="密码" name="password" rules={[{ required: true }]}>
               <Input.Password autoComplete="current-password" />
             </Form.Item>
             <Button type="primary" htmlType="submit" loading={loginLoading} block>
-              Sign In
+              登录
             </Button>
           </Form>
         </Space>
@@ -756,6 +923,7 @@ function App() {
 
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={{
         token: {
           colorPrimary: '#2563eb',
@@ -773,8 +941,8 @@ function App() {
           <div className="brand">
             <ApiOutlined />
             <div>
-              <strong>Quant System</strong>
-              <span>Admin Console</span>
+              <strong>量化系统</strong>
+              <span>管理控制台</span>
             </div>
           </div>
           <Menu mode="inline" defaultSelectedKeys={['backtests']} items={modules} />
@@ -782,152 +950,152 @@ function App() {
         <Layout>
           <Header className="admin-header">
             <div>
-              <Title level={4}>Quant Strategy Admin</Title>
-              <Text type="secondary">Research, backtest, simulate, publish, and audit rule-based strategies.</Text>
+              <Title level={4}>量化策略管理台</Title>
+              <Text type="secondary">管理规则策略的研究、回测、模拟运行、发布和审计。</Text>
             </div>
             <Space>
-              <Badge status={apiStatus === 'Connected' ? 'success' : 'processing'} text={`API ${apiStatus}`} />
-              <Tag color="blue">Admin: {currentUser.username}</Tag>
+              <Badge status={apiStatus === 'Connected' ? 'success' : 'processing'} text={`API ${tStatus(apiStatus)}`} />
+              <Tag color="blue">管理员：{currentUser.username}</Tag>
               <Button
                 type="primary"
                 icon={<PlayCircleOutlined />}
                 onClick={() => backtestForm.submit()}
                 disabled={!instruments.length || !strategyParameterSets.length}
               >
-                New Backtest
+                新建回测
               </Button>
-              <Button onClick={handleLogout}>Sign Out</Button>
+              <Button onClick={handleLogout}>退出登录</Button>
             </Space>
           </Header>
           <Content className="admin-content">
             <section className="metric-grid">
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Managed Instruments</Text>
+                  <Text type="secondary">已管理标的</Text>
                   <Title level={2}>{instruments.length}</Title>
-                  <Text>{instruments[0] ? `${instruments[0].symbol}.${instruments[0].exchange}` : 'Create the first stock below'}</Text>
+                  <Text>{instruments[0] ? `${instruments[0].symbol}.${instruments[0].exchange}` : '请先在下方创建第一只股票'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Fixed Portfolios</Text>
+                  <Text type="secondary">固定组合</Text>
                   <Title level={2}>{portfolios.length}</Title>
-                  <Text>{portfolios[0]?.name ?? 'Create a basket after adding instruments'}</Text>
+                  <Text>{portfolios[0] ? tDisplayText(portfolios[0].name) : '添加标的后创建组合'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Strategy Templates</Text>
+                  <Text type="secondary">策略模板</Text>
                   <Title level={2}>{strategies.length}</Title>
                   <Text>
                     {strategyParameterSets.length
-                      ? `${strategyParameterSets.length} saved parameter sets`
-                      : strategies[0]?.display_name ?? 'Loading strategy registry'}
+                      ? `已保存 ${strategyParameterSets.length} 套参数`
+                      : strategies[0] ? tStrategyName(strategies[0].display_name) : '正在加载策略注册表'}
                   </Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Published Snapshots</Text>
+                  <Text type="secondary">已发布快照</Text>
                   <Title level={2}>{snapshots.length}</Title>
-                  <Text>{snapshots[0] ? `Latest ${snapshots[0].status}` : 'Publish a reviewed backtest'}</Text>
+                  <Text>{snapshots[0] ? `最新状态：${tStatus(snapshots[0].status)}` : '请发布已复核的回测'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Active Share Links</Text>
+                  <Text type="secondary">有效分享链接</Text>
                   <Title level={2}>{shareLinks.filter((link) => link.is_active).length}</Title>
-                  <Text>{shareLinks[0] ? `Latest snapshot #${shareLinks[0].snapshot_id}` : 'Create a client link'}</Text>
+                  <Text>{shareLinks[0] ? `最新快照 #${shareLinks[0].snapshot_id}` : '请创建客户展示链接'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Paper Runs</Text>
+                  <Text type="secondary">模拟运行</Text>
                   <Title level={2}>{paperRuns.length}</Title>
-                  <Text>{paperRuns[0] ? `Latest equity ${paperRuns[0].latest_equity.toFixed(2)}` : 'Run a manual simulation'}</Text>
+                  <Text>{paperRuns[0] ? `最新权益 ${paperRuns[0].latest_equity.toFixed(2)}` : '请发起一次手动模拟'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">Imported Bars</Text>
+                  <Text type="secondary">已导入K线</Text>
                   <Title level={2}>{bars.length}</Title>
-                  <Text>{bars[0] ? `${bars[0].frequency} latest ${bars[bars.length - 1]?.close}` : 'Import CSV market data'}</Text>
+                  <Text>{bars[0] ? `${bars[0].frequency} 最新收盘 ${bars[bars.length - 1]?.close}` : '请导入CSV行情数据'}</Text>
                 </Space>
               </Card>
               <Card>
                 <Space orientation="vertical" size={4}>
-                  <Text type="secondary">V1 Progress</Text>
+                  <Text type="secondary">V1 进度</Text>
                   <Progress percent={64} size="small" />
-                  <Text>Manual paper simulation connected</Text>
+                  <Text>手动模拟运行已接通</Text>
                 </Space>
               </Card>
             </section>
 
             <section className="workspace">
-              <Card title="Instrument Management">
+              <Card title="标的管理">
                 <Form
                   form={instrumentForm}
                   layout="inline"
-                  initialValues={{ symbol: '600519', exchange: 'SH', name: 'Kweichow Moutai', asset_type: 'stock' }}
+                  initialValues={{ symbol: '600519', exchange: 'SH', name: '贵州茅台', asset_type: 'stock' }}
                   onFinish={handleCreateInstrument}
                   className="instrument-form"
                 >
-                  <Form.Item name="symbol" rules={[{ required: true }]}><Input placeholder="Symbol" /></Form.Item>
-                  <Form.Item name="exchange" rules={[{ required: true }]}><Input placeholder="Exchange" /></Form.Item>
-                  <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="Name" /></Form.Item>
-                  <Form.Item name="asset_type" rules={[{ required: true }]}><Input placeholder="Asset Type" /></Form.Item>
-                  <Button type="primary" htmlType="submit" loading={instrumentSaving}>Add Instrument</Button>
+                  <Form.Item name="symbol" rules={[{ required: true }]}><Input placeholder="证券代码" /></Form.Item>
+                  <Form.Item name="exchange" rules={[{ required: true }]}><Input placeholder="交易所" /></Form.Item>
+                  <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="标的名称" /></Form.Item>
+                  <Form.Item name="asset_type" rules={[{ required: true }]}><Input placeholder="资产类型" /></Form.Item>
+                  <Button type="primary" htmlType="submit" loading={instrumentSaving}>新增标的</Button>
                 </Form>
                 <Table
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
-                    { title: 'Symbol', dataIndex: 'symbol', width: 110 },
-                    { title: 'Exchange', dataIndex: 'exchange', width: 110 },
-                    { title: 'Name', dataIndex: 'name' },
-                    { title: 'Type', dataIndex: 'asset_type', width: 100 },
+                    { title: '证券代码', dataIndex: 'symbol', width: 110 },
+                    { title: '交易所', dataIndex: 'exchange', width: 110 },
+                    { title: '名称', dataIndex: 'name', render: (name: string) => tDisplayText(name) },
+                    { title: '类型', dataIndex: 'asset_type', width: 100, render: (assetType: string) => tDisplayText(assetType) },
                   ]}
                   dataSource={instruments.map((instrument) => ({ ...instrument, key: instrument.id }))}
                 />
               </Card>
 
-              <Card title="Fixed Portfolio Management">
+              <Card title="固定组合管理">
                 <Form
                   form={portfolioForm}
                   layout="inline"
                   initialValues={{
-                    name: 'Core A-share Basket',
-                    description: 'Fixed demo portfolio for V1 backtests.',
+                    name: '核心A股组合',
+                    description: '用于V1回测的固定演示组合。',
                     instrument_id: instruments[0]?.id,
                     weight: 1,
                   }}
                   onFinish={handleCreatePortfolio}
                   className="instrument-form"
                 >
-                  <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="Portfolio Name" /></Form.Item>
-                  <Form.Item name="description"><Input placeholder="Description" /></Form.Item>
+                  <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="组合名称" /></Form.Item>
+                  <Form.Item name="description"><Input placeholder="组合说明" /></Form.Item>
                   <Form.Item name="instrument_id" rules={[{ required: true }]}>
-                    <Input placeholder="Instrument ID" />
+                    <Input placeholder="标的ID" />
                   </Form.Item>
-                  <Form.Item name="weight" rules={[{ required: true }]}><Input placeholder="Weight" type="number" /></Form.Item>
+                  <Form.Item name="weight" rules={[{ required: true }]}><Input placeholder="权重" type="number" /></Form.Item>
                   <Button type="primary" htmlType="submit" loading={portfolioSaving} disabled={!instruments.length}>
-                    Add Portfolio
+                    新增组合
                   </Button>
                 </Form>
                 <Table
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
-                    { title: 'Portfolio', dataIndex: 'name' },
-                    { title: 'Description', dataIndex: 'description' },
+                    { title: '组合', dataIndex: 'name', render: (name: string) => tDisplayText(name) },
+                    { title: '说明', dataIndex: 'description', render: (description: string) => tDisplayText(description) },
                     {
-                      title: 'Positions',
+                      title: '持仓数',
                       dataIndex: 'positions',
                       width: 120,
                       render: (positions: Portfolio['positions']) => positions.length,
                     },
                     {
-                      title: 'First Holding',
+                      title: '首个持仓',
                       dataIndex: 'positions',
                       width: 160,
                       render: (positions: Portfolio['positions']) => {
@@ -940,7 +1108,7 @@ function App() {
                 />
               </Card>
 
-              <Card title="Market Data Management">
+              <Card title="行情数据管理">
                 {marketDataError ? <Alert type="error" showIcon title={marketDataError} className="form-alert" /> : null}
                 <Form
                   form={marketDataForm}
@@ -955,21 +1123,21 @@ function App() {
                   onFinish={handleImportMarketData}
                 >
                   <div className="market-data-grid">
-                    <Form.Item name="instrument_id" label="Instrument ID" rules={[{ required: true }]}>
-                      <Input placeholder="Instrument ID" />
+                    <Form.Item name="instrument_id" label="标的ID" rules={[{ required: true }]}>
+                      <Input placeholder="标的ID" />
                     </Form.Item>
-                    <Form.Item name="frequency" label="Frequency" rules={[{ required: true }]}>
+                    <Form.Item name="frequency" label="周期" rules={[{ required: true }]}>
                       <Input placeholder="5m" />
                     </Form.Item>
-                    <Form.Item name="source" label="Source" rules={[{ required: true }]}>
+                    <Form.Item name="source" label="来源" rules={[{ required: true }]}>
                       <Input placeholder="csv" />
                     </Form.Item>
                   </div>
-                  <Form.Item name="csv_text" label="CSV Bars" rules={[{ required: true }]}>
+                  <Form.Item name="csv_text" label="CSV K线" rules={[{ required: true }]}>
                     <Input.TextArea rows={5} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={marketDataImporting} disabled={!instruments.length}>
-                    Import CSV Bars
+                    导入CSV K线
                   </Button>
                 </Form>
                 <Form
@@ -986,35 +1154,35 @@ function App() {
                   className="public-fetch-form"
                 >
                   <div className="market-data-grid">
-                    <Form.Item name="instrument_id" label="Instrument ID" rules={[{ required: true }]}>
-                      <Input placeholder="Instrument ID" />
+                    <Form.Item name="instrument_id" label="标的ID" rules={[{ required: true }]}>
+                      <Input placeholder="标的ID" />
                     </Form.Item>
-                    <Form.Item name="frequency" label="Frequency" rules={[{ required: true }]}>
+                    <Form.Item name="frequency" label="周期" rules={[{ required: true }]}>
                       <Input placeholder="5m" />
                     </Form.Item>
-                    <Form.Item name="adjust" label="Adjust">
+                    <Form.Item name="adjust" label="复权">
                       <Input placeholder="none / qfq / hfq" />
                     </Form.Item>
                   </div>
                   <div className="market-data-grid">
-                    <Form.Item name="start_date" label="Start" rules={[{ required: true }]}>
+                    <Form.Item name="start_date" label="开始时间" rules={[{ required: true }]}>
                       <Input placeholder="2026-01-02 09:30:00" />
                     </Form.Item>
-                    <Form.Item name="end_date" label="End" rules={[{ required: true }]}>
+                    <Form.Item name="end_date" label="结束时间" rules={[{ required: true }]}>
                       <Input placeholder="2026-01-02 15:00:00" />
                     </Form.Item>
-                    <Form.Item label="Source">
+                    <Form.Item label="来源">
                       <Input value="akshare" disabled />
                     </Form.Item>
                   </div>
                   <Button type="primary" htmlType="submit" loading={publicDataFetching} disabled={!instruments.length}>
-                    Fetch Public Bars
+                    拉取公开K线
                   </Button>
                 </Form>
                 <div className="data-quality-panel">
                   <div>
-                    <Text strong>Data Completeness</Text>
-                    <Text type="secondary">{dataCompleteness?.message ?? 'Check selected instrument data before backtests.'}</Text>
+                    <Text strong>数据完整性</Text>
+                    <Text type="secondary">{tDataMessage(dataCompleteness?.message)}</Text>
                   </div>
                   <Space wrap>
                     <Tag
@@ -1028,18 +1196,18 @@ function App() {
                               : 'default'
                       }
                     >
-                      {dataCompleteness?.status ?? 'unchecked'}
+                      {tStatus(dataCompleteness?.status ?? 'unchecked')}
                     </Tag>
-                    <Text>Bars: {dataCompleteness?.bar_count ?? '-'}</Text>
-                    <Text>Completeness: {formatRatio(dataCompleteness?.completeness_ratio)}</Text>
-                    <Text>Missing: {dataCompleteness?.missing_bar_count ?? '-'}</Text>
-                    <Text>Gaps: {dataCompleteness?.gap_count ?? '-'}</Text>
-                    <Text>Largest Gap: {dataCompleteness?.largest_gap_minutes ?? '-'} min</Text>
-                    <Text>First: {formatDateTime(dataCompleteness?.first_timestamp)}</Text>
-                    <Text>Last: {formatDateTime(dataCompleteness?.last_timestamp)}</Text>
+                    <Text>K线数：{dataCompleteness?.bar_count ?? '-'}</Text>
+                    <Text>完整率：{formatRatio(dataCompleteness?.completeness_ratio)}</Text>
+                    <Text>缺失：{dataCompleteness?.missing_bar_count ?? '-'}</Text>
+                    <Text>缺口：{dataCompleteness?.gap_count ?? '-'}</Text>
+                    <Text>最大缺口：{dataCompleteness?.largest_gap_minutes ?? '-'} 分钟</Text>
+                    <Text>最早：{formatDateTime(dataCompleteness?.first_timestamp)}</Text>
+                    <Text>最新：{formatDateTime(dataCompleteness?.last_timestamp)}</Text>
                   </Space>
                   <Button onClick={handleCheckDataCompleteness} loading={dataCompletenessChecking} disabled={!instruments.length}>
-                    Check Completeness
+                    检查完整性
                   </Button>
                 </div>
                 <Table
@@ -1047,42 +1215,42 @@ function App() {
                   pagination={{ pageSize: 5 }}
                   columns={[
                     {
-                      title: 'Time',
+                      title: '时间',
                       dataIndex: 'timestamp',
                       width: 190,
                       render: (value: string) => new Date(value).toLocaleString(),
                     },
-                    { title: 'Open', dataIndex: 'open', width: 90 },
-                    { title: 'High', dataIndex: 'high', width: 90 },
-                    { title: 'Low', dataIndex: 'low', width: 90 },
-                    { title: 'Close', dataIndex: 'close', width: 90 },
-                    { title: 'Volume', dataIndex: 'volume', width: 110 },
+                    { title: '开盘', dataIndex: 'open', width: 90 },
+                    { title: '最高', dataIndex: 'high', width: 90 },
+                    { title: '最低', dataIndex: 'low', width: 90 },
+                    { title: '收盘', dataIndex: 'close', width: 90 },
+                    { title: '成交量', dataIndex: 'volume', width: 110 },
                   ]}
                   dataSource={bars.map((bar) => ({ ...bar, key: bar.id }))}
                 />
               </Card>
 
-              <Card title="Data Import Tasks">
+              <Card title="数据导入任务">
                 <Table
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
-                    { title: 'Source', dataIndex: 'source', width: 90 },
+                    { title: '来源', dataIndex: 'source', width: 90 },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'status',
                       width: 110,
-                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : status === 'failed' ? 'red' : 'blue'}>{status}</Tag>,
+                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : status === 'failed' ? 'red' : 'blue'}>{tStatus(status)}</Tag>,
                     },
-                    { title: 'Imported', dataIndex: 'rows_imported', width: 100 },
-                    { title: 'Updated', dataIndex: 'rows_updated', width: 100 },
-                    { title: 'Message', dataIndex: 'message' },
+                    { title: '新增行', dataIndex: 'rows_imported', width: 100 },
+                    { title: '更新行', dataIndex: 'rows_updated', width: 100 },
+                    { title: '消息', dataIndex: 'message', render: (message: string) => tDataMessage(message) },
                   ]}
                   dataSource={dataImportTasks.map((task) => ({ ...task, key: task.id }))}
                 />
               </Card>
 
-              <Card title="Market Data Schedules">
+              <Card title="行情数据计划">
                 <Form
                   form={scheduleForm}
                   layout="vertical"
@@ -1097,29 +1265,29 @@ function App() {
                   onFinish={handleCreateMarketDataSchedule}
                 >
                   <div className="market-data-grid">
-                    <Form.Item name="instrument_id" label="Instrument ID" rules={[{ required: true }]}>
-                      <Input placeholder="Instrument ID" />
+                    <Form.Item name="instrument_id" label="标的ID" rules={[{ required: true }]}>
+                      <Input placeholder="标的ID" />
                     </Form.Item>
-                    <Form.Item name="frequency" label="Frequency" rules={[{ required: true }]}>
+                    <Form.Item name="frequency" label="周期" rules={[{ required: true }]}>
                       <Input placeholder="5m" />
                     </Form.Item>
-                    <Form.Item name="interval_minutes" label="Interval Minutes" rules={[{ required: true }]}>
+                    <Form.Item name="interval_minutes" label="间隔分钟" rules={[{ required: true }]}>
                       <InputNumber min={1} max={1440} />
                     </Form.Item>
                   </div>
                   <div className="market-data-grid">
-                    <Form.Item name="start_date" label="Start" rules={[{ required: true }]}>
+                    <Form.Item name="start_date" label="开始时间" rules={[{ required: true }]}>
                       <Input placeholder="2026-01-02 09:30:00" />
                     </Form.Item>
-                    <Form.Item name="end_date" label="End" rules={[{ required: true }]}>
+                    <Form.Item name="end_date" label="结束时间" rules={[{ required: true }]}>
                       <Input placeholder="2026-01-02 15:00:00" />
                     </Form.Item>
-                    <Form.Item name="adjust" label="Adjust">
+                    <Form.Item name="adjust" label="复权">
                       <Input placeholder="none / qfq / hfq" />
                     </Form.Item>
                   </div>
                   <Button type="primary" htmlType="submit" loading={scheduleSaving} disabled={!instruments.length}>
-                    Add Schedule
+                    新增计划
                   </Button>
                 </Form>
                 <Table
@@ -1127,18 +1295,18 @@ function App() {
                   pagination={{ pageSize: 5 }}
                   columns={[
                     { title: 'ID', dataIndex: 'id', width: 70 },
-                    { title: 'Instrument', dataIndex: 'instrument_id', width: 100 },
-                    { title: 'Frequency', dataIndex: 'frequency', width: 100 },
-                    { title: 'Every', dataIndex: 'interval_minutes', width: 100, render: (value: number) => `${value} min` },
+                    { title: '标的', dataIndex: 'instrument_id', width: 100 },
+                    { title: '周期', dataIndex: 'frequency', width: 100 },
+                    { title: '间隔', dataIndex: 'interval_minutes', width: 100, render: (value: number) => `${value} 分钟` },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'is_active',
                       width: 100,
-                      render: (active: boolean) => <Tag color={active ? 'green' : 'default'}>{active ? 'active' : 'disabled'}</Tag>,
+                      render: (active: boolean) => <Tag color={active ? 'green' : 'default'}>{active ? '启用' : '停用'}</Tag>,
                     },
-                    { title: 'Last Run', dataIndex: 'last_message' },
+                    { title: '上次执行', dataIndex: 'last_message', render: (message: string) => tDataMessage(message) },
                     {
-                      title: 'Action',
+                      title: '操作',
                       dataIndex: 'id',
                       width: 190,
                       render: (scheduleId: number, schedule: MarketDataSchedule) => (
@@ -1149,14 +1317,14 @@ function App() {
                             loading={scheduleActionId === scheduleId}
                             disabled={!schedule.is_active}
                           >
-                            Run Now
+                            立即执行
                           </Button>
                           <Button
                             size="small"
                             onClick={() => handleDisableMarketDataSchedule(scheduleId)}
                             disabled={!schedule.is_active}
                           >
-                            Disable
+                            停用
                           </Button>
                         </Space>
                       ),
@@ -1166,13 +1334,13 @@ function App() {
                 />
               </Card>
 
-              <Card title="Strategy Template Management">
+              <Card title="策略模板管理">
                 {strategyParameterError ? <Alert type="error" showIcon title={strategyParameterError} className="form-alert" /> : null}
                 {strategies[0] ? (
                   <>
                     <Space orientation="vertical" size={4} className="strategy-summary">
-                      <Text strong>{strategies[0].display_name}</Text>
-                      <Text type="secondary">{strategies[0].description}</Text>
+                      <Text strong>{tStrategyName(strategies[0].display_name)}</Text>
+                      <Text type="secondary">{tStrategyDescription(strategies[0].description)}</Text>
                       <Space wrap>
                         {strategies[0].supported_frequencies.map((frequency) => (
                           <Tag color={frequency === '5m' ? 'blue' : 'default'} key={frequency}>
@@ -1187,49 +1355,49 @@ function App() {
                       onFinish={handleCreateStrategyParameterSet}
                       className="strategy-parameter-form"
                     >
-                      <Form.Item name="name" label="Parameter Set Name" rules={[{ required: true }]}>
-                        <Input placeholder="Parameter set name" />
+                      <Form.Item name="name" label="参数集名称" rules={[{ required: true }]}>
+                        <Input placeholder="参数集名称" />
                       </Form.Item>
                       <div className="strategy-parameter-grid">
                         {strategies[0].parameters.map((parameter) => (
                           <Form.Item
                             key={parameter.name}
                             name={parameter.name}
-                            label={parameter.label}
+                            label={tParameterLabel(parameter.label)}
                             valuePropName={parameter.type === 'boolean' ? 'checked' : 'value'}
-                            extra={parameter.description}
+                            extra={tParameterDescription(parameter.description)}
                           >
                             {renderStrategyParameterInput(parameter)}
                           </Form.Item>
                         ))}
                       </div>
                       <Button type="primary" htmlType="submit" loading={strategyParameterSaving}>
-                        Save Strategy Config
+                        保存策略配置
                       </Button>
                     </Form>
                   </>
                 ) : (
-                  <Text type="secondary">Loading strategy metadata</Text>
+                  <Text type="secondary">正在加载策略元数据</Text>
                 )}
                 <Table
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
-                    { title: 'Name', dataIndex: 'name' },
-                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    { title: '名称', dataIndex: 'name', render: (name: string) => tDisplayText(name) },
+                    { title: '策略', dataIndex: 'strategy_id', width: 150 },
                     {
-                      title: 'Grid %',
+                      title: '网格%',
                       dataIndex: 'parameters',
                       width: 100,
                       render: (parameters: StrategyParameterSet['parameters']) => parameters.grid_percent,
                     },
                     {
-                      title: 'MA Filter',
+                      title: '均线过滤',
                       dataIndex: 'parameters',
                       width: 110,
                       render: (parameters: StrategyParameterSet['parameters']) => (
                         <Tag color={parameters.enable_ma_filter ? 'green' : 'default'}>
-                          {parameters.enable_ma_filter ? 'on' : 'off'}
+                          {parameters.enable_ma_filter ? '开启' : '关闭'}
                         </Tag>
                       ),
                     },
@@ -1238,7 +1406,7 @@ function App() {
                 />
               </Card>
 
-              <Card title="Backtest Task Management">
+              <Card title="回测任务管理">
                 {backtestError ? <Alert type="error" showIcon title={backtestError} className="form-alert" /> : null}
                 <Form
                   form={backtestForm}
@@ -1253,19 +1421,19 @@ function App() {
                   className="instrument-form"
                 >
                   <Form.Item name="instrument_id">
-                    <Input placeholder="Instrument ID" />
+                    <Input placeholder="标的ID" />
                   </Form.Item>
                   <Form.Item name="portfolio_id">
-                    <Input placeholder="Portfolio ID" />
+                    <Input placeholder="组合ID" />
                   </Form.Item>
                   <Form.Item name="frequency" rules={[{ required: true }]}>
                     <Input placeholder="5m" />
                   </Form.Item>
                   <Form.Item name="parameter_set_id" rules={[{ required: true }]}>
-                    <Input placeholder="Parameter Set ID" />
+                    <Input placeholder="参数集ID" />
                   </Form.Item>
                   <Form.Item name="initial_cash" rules={[{ required: true }]}>
-                    <InputNumber min={1} placeholder="Initial Cash" />
+                    <InputNumber min={1} placeholder="初始资金" />
                   </Form.Item>
                   <Button
                     type="primary"
@@ -1273,7 +1441,7 @@ function App() {
                     loading={backtestRunning}
                     disabled={(!instruments.length && !portfolios.length) || !strategyParameterSets.length}
                   >
-                    Run Backtest
+                    运行回测
                   </Button>
                 </Form>
                 <Table
@@ -1281,53 +1449,53 @@ function App() {
                   pagination={{ pageSize: 5 }}
                   columns={[
                     { title: 'ID', dataIndex: 'id', width: 70 },
-                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    { title: '策略', dataIndex: 'strategy_id', width: 150 },
                     {
-                      title: 'Scope',
+                      title: '范围',
                       dataIndex: 'config',
                       width: 150,
                       render: (config: BacktestRun['config']) =>
                         config.scope === 'portfolio'
-                          ? `Portfolio #${config.portfolio_id ?? '-'}`
-                          : `Instrument #${config.instrument_id ?? '-'}`,
+                          ? `组合 #${config.portfolio_id ?? '-'}`
+                          : `标的 #${config.instrument_id ?? '-'}`,
                     },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'status',
                       width: 110,
-                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{status}</Tag>,
+                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{tStatus(status)}</Tag>,
                     },
                     {
-                      title: 'Return',
+                      title: '收益率',
                       dataIndex: 'metrics',
                       width: 110,
                       render: (metrics: BacktestRun['metrics']) => `${(((metrics.cumulative_return ?? 0) as number) * 100).toFixed(2)}%`,
                     },
                     {
-                      title: 'Max DD',
+                      title: '最大回撤',
                       dataIndex: 'metrics',
                       width: 110,
                       render: (metrics: BacktestRun['metrics']) => `${(((metrics.max_drawdown ?? 0) as number) * 100).toFixed(2)}%`,
                     },
                     {
-                      title: 'Trades',
+                      title: '交易数',
                       dataIndex: 'metrics',
                       width: 90,
                       render: (metrics: BacktestRun['metrics']) => metrics.trade_count ?? 0,
                     },
                     {
-                      title: 'Equity Points',
+                      title: '权益点数',
                       dataIndex: 'result_payload',
                       width: 130,
                       render: (payload: BacktestRun['result_payload']) => payload.equity_curve?.length ?? 0,
                     },
                     {
-                      title: 'Review',
+                      title: '复核',
                       dataIndex: 'id',
                       width: 100,
                       render: (backtestId: number) => (
                         <Button size="small" onClick={() => setSelectedBacktestId(backtestId)}>
-                          Review
+                          查看
                         </Button>
                       ),
                     },
@@ -1344,7 +1512,7 @@ function App() {
                 title={
                   <Space>
                     <AreaChartOutlined />
-                    Backtest Result Review
+                    回测结果复核
                   </Space>
                 }
               >
@@ -1352,9 +1520,9 @@ function App() {
                   <Space orientation="vertical" size={16} className="review-panel">
                     <div className="review-header">
                       <Space wrap>
-                        <Tag color="blue">Backtest #{selectedBacktest.id}</Tag>
+                        <Tag color="blue">回测 #{selectedBacktest.id}</Tag>
                         <Tag color={selectedBacktest.status === 'succeeded' ? 'green' : 'red'}>
-                          {selectedBacktest.status}
+                          {tStatus(selectedBacktest.status)}
                         </Tag>
                         <Text type="secondary">{selectedBacktest.strategy_id}</Text>
                       </Space>
@@ -1363,60 +1531,60 @@ function App() {
                         onClick={() =>
                           snapshotForm.setFieldsValue({
                             backtest_run_id: selectedBacktest.id,
-                            title: `Strategy Report #${selectedBacktest.id}`,
+                            title: `策略展示报告 #${selectedBacktest.id}`,
                           })
                         }
                       >
-                        Use For Snapshot
+                        用于快照
                       </Button>
                     </div>
                     <div className="review-metrics">
                       <div>
-                        <Text type="secondary">Cumulative Return</Text>
+                        <Text type="secondary">累计收益</Text>
                         <strong>{formatPercent(selectedBacktest.metrics.cumulative_return)}</strong>
                       </div>
                       <div>
-                        <Text type="secondary">Max Drawdown</Text>
+                        <Text type="secondary">最大回撤</Text>
                         <strong>{formatPercent(selectedBacktest.metrics.max_drawdown)}</strong>
                       </div>
                       <div>
-                        <Text type="secondary">Win Rate</Text>
+                        <Text type="secondary">胜率</Text>
                         <strong>{formatPercent(selectedBacktest.metrics.win_rate)}</strong>
                       </div>
                       <div>
-                        <Text type="secondary">Trades</Text>
+                        <Text type="secondary">交易数</Text>
                         <strong>{selectedBacktest.metrics.trade_count ?? 0}</strong>
                       </div>
                       <div>
-                        <Text type="secondary">P/L Ratio</Text>
+                        <Text type="secondary">盈亏比</Text>
                         <strong>{formatNumber(selectedBacktest.metrics.profit_loss_ratio)}</strong>
                       </div>
                     </div>
                     <div className="review-chart-grid">
                       <div className="review-chart-panel">
                         <div>
-                          <Text strong>Equity Curve</Text>
-                          <Text type="secondary">{selectedEquity.length} points</Text>
+                          <Text strong>权益曲线</Text>
+                          <Text type="secondary">{selectedEquity.length} 个点</Text>
                         </div>
-                        <svg viewBox="0 0 360 120" role="img" aria-label="Equity curve">
+                        <svg viewBox="0 0 360 120" role="img" aria-label="权益曲线">
                           <polyline points={chartPoints(selectedEquity)} />
                         </svg>
                       </div>
                       <div className="review-chart-panel">
                         <div>
-                          <Text strong>Drawdown Curve</Text>
-                          <Text type="secondary">{selectedDrawdown.length} points</Text>
+                          <Text strong>回撤曲线</Text>
+                          <Text type="secondary">{selectedDrawdown.length} 个点</Text>
                         </div>
-                        <svg viewBox="0 0 360 120" role="img" aria-label="Drawdown curve">
+                        <svg viewBox="0 0 360 120" role="img" aria-label="回撤曲线">
                           <polyline points={chartPoints(selectedDrawdown)} />
                         </svg>
                       </div>
                       <div className="review-chart-panel">
                         <div>
-                          <Text strong>Position Curve</Text>
-                          <Text type="secondary">{selectedPosition.length} points</Text>
+                          <Text strong>仓位曲线</Text>
+                          <Text type="secondary">{selectedPosition.length} 个点</Text>
                         </div>
-                        <svg viewBox="0 0 360 120" role="img" aria-label="Position curve">
+                        <svg viewBox="0 0 360 120" role="img" aria-label="仓位曲线">
                           <polyline points={chartPoints(selectedPosition)} />
                         </svg>
                       </div>
@@ -1426,20 +1594,20 @@ function App() {
                       pagination={{ pageSize: 4 }}
                       columns={[
                         {
-                          title: 'Time',
+                          title: '时间',
                           dataIndex: 'timestamp',
                           width: 190,
                           render: (value: string) => new Date(value).toLocaleString(),
                         },
                         {
-                          title: 'Side',
+                          title: '方向',
                           dataIndex: 'side',
                           width: 90,
-                          render: (side: string) => <Tag color={side === 'buy' ? 'green' : 'volcano'}>{side}</Tag>,
+                          render: (side: string) => <Tag color={side === 'buy' ? 'green' : 'volcano'}>{tStatus(side)}</Tag>,
                         },
-                        { title: 'Price', dataIndex: 'price', width: 100, render: (_: unknown, trade: Record<string, unknown>) => tradeValue(trade, 'price') },
+                        { title: '价格', dataIndex: 'price', width: 100, render: (_: unknown, trade: Record<string, unknown>) => tradeValue(trade, 'price') },
                         {
-                          title: 'Change %',
+                          title: '涨跌幅',
                           dataIndex: 'change_percent',
                           width: 120,
                           render: (_: unknown, trade: Record<string, unknown>) => `${tradeValue(trade, 'change_percent')}%`,
@@ -1448,16 +1616,18 @@ function App() {
                       dataSource={selectedTrades.map((trade, index) => ({ ...trade, key: index }))}
                     />
                     <Text type="secondary">
-                      {selectedBacktest.result_payload.risk_disclosure ??
-                        'Backtest results are simulated and do not represent real-money trading.'}
+                      {tDisplayText(
+                        selectedBacktest.result_payload.risk_disclosure ??
+                          'Backtest results are simulated and do not represent real-money trading.',
+                      )}
                     </Text>
                   </Space>
                 ) : (
-                  <Text type="secondary">Run a backtest to review metrics, curves, and trades before publishing.</Text>
+                  <Text type="secondary">请先运行回测，再复核指标、曲线和交易明细后发布。</Text>
                 )}
               </Card>
 
-              <Card title="Paper Simulation Management">
+              <Card title="模拟运行管理">
                 {paperRunError ? <Alert type="error" showIcon title={paperRunError} className="form-alert" /> : null}
                 <Form
                   form={paperRunForm}
@@ -1472,19 +1642,19 @@ function App() {
                   className="instrument-form"
                 >
                   <Form.Item name="instrument_id" rules={[{ required: true }]}>
-                    <Input placeholder="Instrument ID" />
+                    <Input placeholder="标的ID" />
                   </Form.Item>
                   <Form.Item name="frequency" rules={[{ required: true }]}>
                     <Input placeholder="5m" />
                   </Form.Item>
                   <Form.Item name="parameter_set_id" rules={[{ required: true }]}>
-                    <Input placeholder="Parameter Set ID" />
+                    <Input placeholder="参数集ID" />
                   </Form.Item>
                   <Form.Item name="initial_cash" rules={[{ required: true }]}>
-                    <InputNumber min={1} placeholder="Initial Cash" />
+                    <InputNumber min={1} placeholder="初始资金" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={paperRunStarting} disabled={!instruments.length || !strategyParameterSets.length}>
-                    Run Paper Simulation
+                    运行模拟
                   </Button>
                 </Form>
                 <Table
@@ -1492,33 +1662,33 @@ function App() {
                   pagination={{ pageSize: 5 }}
                   columns={[
                     { title: 'ID', dataIndex: 'id', width: 70 },
-                    { title: 'Strategy', dataIndex: 'strategy_id', width: 150 },
+                    { title: '策略', dataIndex: 'strategy_id', width: 150 },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'status',
                       width: 110,
-                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{status}</Tag>,
+                      render: (status: string) => <Tag color={status === 'succeeded' ? 'green' : 'red'}>{tStatus(status)}</Tag>,
                     },
                     {
-                      title: 'Latest Equity',
+                      title: '最新权益',
                       dataIndex: 'latest_equity',
                       width: 130,
                       render: (value: number) => value.toFixed(2),
                     },
                     {
-                      title: 'Latest Signal',
+                      title: '最新信号',
                       dataIndex: 'config',
                       width: 130,
-                      render: (config: PaperRun['config']) => config.metrics?.latest_signal ?? 'hold',
+                      render: (config: PaperRun['config']) => tStatus(config.metrics?.latest_signal ?? 'hold'),
                     },
                     {
-                      title: 'Position',
+                      title: '仓位',
                       dataIndex: 'config',
                       width: 110,
                       render: (config: PaperRun['config']) => `${config.metrics?.latest_position_percent ?? 0}%`,
                     },
                     {
-                      title: 'Trades',
+                      title: '交易数',
                       dataIndex: 'config',
                       width: 90,
                       render: (config: PaperRun['config']) => config.metrics?.trade_count ?? 0,
@@ -1528,14 +1698,14 @@ function App() {
                 />
               </Card>
 
-              <Card title="Snapshot Publishing">
+              <Card title="快照发布">
                 {snapshotError ? <Alert type="error" showIcon title={snapshotError} className="form-alert" /> : null}
                 {latestShareToken ? (
                   <Alert
                     type="success"
                     showIcon
                     className="form-alert"
-                    title="Client report link generated"
+                    title="客户报告链接已生成"
                     description={clientReportUrl(latestShareToken)}
                   />
                 ) : null}
@@ -1544,19 +1714,19 @@ function App() {
                   layout="inline"
                   initialValues={{
                     backtest_run_id: backtests[0]?.id,
-                    title: backtests[0] ? `Strategy Report #${backtests[0].id}` : 'Rolling T Strategy Report',
+                    title: backtests[0] ? `策略展示报告 #${backtests[0].id}` : '滚动做T策略报告',
                   }}
                   onFinish={handlePublishSnapshot}
                   className="instrument-form"
                 >
                   <Form.Item name="backtest_run_id" rules={[{ required: true }]}>
-                    <Input placeholder="Backtest Run ID" />
+                    <Input placeholder="回测任务ID" />
                   </Form.Item>
                   <Form.Item name="title" rules={[{ required: true }]}>
-                    <Input placeholder="Snapshot Title" />
+                    <Input placeholder="快照标题" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={snapshotPublishing} disabled={!backtests.length}>
-                    Publish Snapshot
+                    发布快照
                   </Button>
                 </Form>
                 <Table
@@ -1564,17 +1734,17 @@ function App() {
                   pagination={{ pageSize: 5 }}
                   columns={[
                     { title: 'ID', dataIndex: 'id', width: 70 },
-                    { title: 'Title', dataIndex: 'title' },
-                    { title: 'Backtest', dataIndex: 'backtest_run_id', width: 100 },
-                    { title: 'Version', dataIndex: 'version', width: 90 },
+                    { title: '标题', dataIndex: 'title', render: (title: string) => tDisplayText(title) },
+                    { title: '回测', dataIndex: 'backtest_run_id', width: 100 },
+                    { title: '版本', dataIndex: 'version', width: 90 },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'status',
                       width: 110,
-                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{status}</Tag>,
+                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{tStatus(status)}</Tag>,
                     },
                     {
-                      title: 'Action',
+                      title: '操作',
                       dataIndex: 'id',
                       width: 120,
                       render: (snapshotId: number, snapshot: PublishedSnapshot) => (
@@ -1584,7 +1754,7 @@ function App() {
                           loading={snapshotRevokingId === snapshotId}
                           disabled={snapshot.status !== 'published'}
                         >
-                          Revoke
+                          撤销
                         </Button>
                       ),
                     },
@@ -1593,14 +1763,14 @@ function App() {
                 />
               </Card>
 
-              <Card title="Client Share Link Management">
+              <Card title="客户分享链接管理">
                 {shareLinkError ? <Alert type="error" showIcon title={shareLinkError} className="form-alert" /> : null}
                 {latestShareToken ? (
                   <Alert
                     type="success"
                     showIcon
                     className="form-alert"
-                    title="New share link ready"
+                    title="新分享链接已就绪"
                     description={clientReportUrl(latestShareToken)}
                   />
                 ) : null}
@@ -1608,29 +1778,29 @@ function App() {
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
-                    { title: 'Link ID', dataIndex: 'id', width: 80 },
-                    { title: 'Snapshot', dataIndex: 'snapshot_id', width: 100 },
-                    { title: 'Title', dataIndex: 'snapshot_title' },
+                    { title: '链接ID', dataIndex: 'id', width: 80 },
+                    { title: '快照', dataIndex: 'snapshot_id', width: 100 },
+                    { title: '标题', dataIndex: 'snapshot_title', render: (title: string) => tDisplayText(title) },
                     {
-                      title: 'Snapshot Status',
+                      title: '快照状态',
                       dataIndex: 'snapshot_status',
                       width: 140,
-                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{status}</Tag>,
+                      render: (status: string) => <Tag color={status === 'published' ? 'green' : 'red'}>{tStatus(status)}</Tag>,
                     },
                     {
-                      title: 'Link Status',
+                      title: '链接状态',
                       dataIndex: 'is_active',
                       width: 120,
-                      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'active' : 'revoked'}</Tag>,
+                      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? '有效' : '已撤销'}</Tag>,
                     },
                     {
-                      title: 'Created At',
+                      title: '创建时间',
                       dataIndex: 'created_at',
                       width: 190,
                       render: (value: string) => new Date(value).toLocaleString(),
                     },
                     {
-                      title: 'Action',
+                      title: '操作',
                       dataIndex: 'id',
                       width: 250,
                       render: (shareLinkId: number, shareLink: ShareLink) => (
@@ -1642,7 +1812,7 @@ function App() {
                             loading={shareLinkCreatingId === shareLink.snapshot_id}
                             disabled={shareLink.snapshot_status !== 'published'}
                           >
-                            New Link
+                            新建链接
                           </Button>
                           <Button
                             size="small"
@@ -1650,7 +1820,7 @@ function App() {
                             loading={shareLinkRevokingId === shareLinkId}
                             disabled={!shareLink.is_active}
                           >
-                            Revoke Link
+                            撤销链接
                           </Button>
                         </Space>
                       ),
@@ -1664,12 +1834,12 @@ function App() {
                 title={
                   <Space>
                     <LineChartOutlined />
-                    V1 Main Workflow
+                    V1 主流程
                   </Space>
                 }
               >
                 <div className="pipeline">
-                  {['Import Data', 'Set Strategy', 'Run Backtest', 'Review Result', 'Publish Snapshot', 'Client Report'].map(
+                  {['导入数据', '配置策略', '运行回测', '复核结果', '发布快照', '客户报告'].map(
                     (item) => (
                       <div className="pipeline-step" key={item}>
                         <SafetyCertificateOutlined />
@@ -1680,23 +1850,23 @@ function App() {
                 </div>
               </Card>
 
-              <Card title="Recent Tasks">
+              <Card title="近期任务">
                 <Table
                   size="small"
                   pagination={false}
                   columns={[
-                    { title: 'Task', dataIndex: 'name' },
-                    { title: 'Type', dataIndex: 'type', width: 100 },
+                    { title: '任务', dataIndex: 'name' },
+                    { title: '类型', dataIndex: 'type', width: 100 },
                     {
-                      title: 'Status',
+                      title: '状态',
                       dataIndex: 'status',
                       width: 110,
                       render: (status: string) => {
-                        const color = status === 'Succeeded' ? 'green' : status === 'Running' ? 'blue' : 'default'
-                        return <Tag color={color}>{status}</Tag>
+                        const color = status === 'succeeded' ? 'green' : status === 'running' ? 'blue' : 'default'
+                        return <Tag color={color}>{tStatus(status)}</Tag>
                       },
                     },
-                    { title: 'Updated At', dataIndex: 'updatedAt', width: 180 },
+                    { title: '更新时间', dataIndex: 'updatedAt', width: 180 },
                   ]}
                   dataSource={tasks}
                 />
@@ -1706,28 +1876,28 @@ function App() {
                 title={
                   <Space>
                     <AreaChartOutlined />
-                    System Boundaries
+                    系统边界
                   </Space>
                 }
               >
                 <div className="boundary-list">
-                  <Tag color="blue">No live trading in V1</Tag>
-                  <Tag color="purple">No strategy logic in frontend</Tag>
-                  <Tag color="cyan">Published snapshots are immutable</Tag>
-                  <Tag color="geekblue">vn.py remains a lower-level reference</Tag>
+                  <Tag color="blue">V1 不接入实盘交易</Tag>
+                  <Tag color="purple">前端不承载策略逻辑</Tag>
+                  <Tag color="cyan">已发布快照不可变更</Tag>
+                  <Tag color="geekblue">vn.py 保持为底层参考</Tag>
                 </div>
               </Card>
 
-              <Card title="Operation Logs">
+              <Card title="操作日志">
                 <Table
                   size="small"
                   pagination={{ pageSize: 6 }}
                   columns={[
-                    { title: 'Action', dataIndex: 'action' },
-                    { title: 'Actor', dataIndex: 'actor', width: 110 },
-                    { title: 'Target', dataIndex: 'target_type', width: 120 },
+                    { title: '动作', dataIndex: 'action', render: (action: string) => tAction(action) },
+                    { title: '操作人', dataIndex: 'actor', width: 110 },
+                    { title: '对象', dataIndex: 'target_type', width: 120, render: (targetType: string) => tTargetType(targetType) },
                     {
-                      title: 'Created At',
+                      title: '创建时间',
                       dataIndex: 'created_at',
                       width: 210,
                       render: (value: string) => new Date(value).toLocaleString(),

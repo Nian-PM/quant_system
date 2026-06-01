@@ -39,12 +39,18 @@
   align-items: center;
   justify-content: space-between;
   height: 72px;
+  line-height: normal;
   padding: 0 28px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .admin-header h4 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.admin-header .ant-typography {
   margin: 0;
 }
 
