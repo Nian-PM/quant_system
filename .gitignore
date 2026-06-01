@@ -6,12 +6,16 @@ __pycache__/
 *.pyd
 .Python
 .pytest_cache/
+.playwright-mcp/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+node_modules/
+dist/
 
 # Local runtime data
+data/
 *.db
 *.sqlite
 *.sqlite3

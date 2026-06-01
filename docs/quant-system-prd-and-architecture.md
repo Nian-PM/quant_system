@@ -249,6 +249,28 @@ Data task starts
 
 The system must not silently continue with incomplete data when running backtests or paper simulations.
 
+### 7.3 V1 CSV Market Data Import
+
+Before public data auto-fetch is complete, the V1 admin workbench supports CSV text import as the deterministic fallback path.
+
+Required CSV columns:
+
+```text
+timestamp,open,high,low,close,volume
+```
+
+Import rules:
+
+- The admin selects one instrument and one bar frequency before importing.
+- `timestamp` is parsed as ISO-like local datetime text, for example `2026-01-02 09:35:00`.
+- `open`, `high`, `low`, `close`, and `volume` must be numeric.
+- Re-importing the same instrument, frequency, and timestamp updates the existing bar instead of creating duplicate bars.
+- Each import creates a `DataImportTask` row with status, row count, and failure message.
+- Failed imports must not partially persist bars.
+- Import actions and failures are recorded in operation logs.
+
+The first admin UI only needs a textarea-based CSV importer. File upload and akshare scheduled fetch can be layered on top of the same backend service later.
+
 ## 8. Suggested Data Objects
 
 | Object | Purpose |
