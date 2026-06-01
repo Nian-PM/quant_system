@@ -314,6 +314,8 @@ The first admin UI includes a textarea-based CSV importer plus manual and schedu
 - SQLite for local development
 - PostgreSQL for server deployment
 
+The development backend uses SQLModel `create_all` for additive local table creation. To reduce silent deployment risk before a full migration system is introduced, `/api/health` must report a schema self-check comparing declared SQLModel tables and columns with the connected database. A mismatch should degrade health output and list missing tables/columns; it should not mutate production schemas automatically.
+
 ### Frontends
 
 - React

@@ -63,6 +63,7 @@ Default local URLs:
 - CSV market data import through the admin frontend.
 - Manual public market data fetch task through akshare when available.
 - APScheduler-backed interval market data schedules with run-now and disable controls.
+- Backend health check includes a database schema self-check for missing tables/columns.
 - Recent bar query and data import task list.
 - Saved strategy parameter sets generated from backend strategy metadata.
 - Single-instrument rolling T/grid backtests using stored bars.
